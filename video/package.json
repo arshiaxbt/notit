@@ -1,0 +1,25 @@
+{
+  "name": "notit-film",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Motion-design demo film for Not It ($NOTIT), built with Remotion",
+  "scripts": {
+    "studio": "remotion studio",
+    "footage": "node scripts/gen-footage.mjs",
+    "render": "remotion render Film out/demo.mp4",
+    "poster": "remotion still Film out/demo-poster.png --frame=46",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.543",
+    "@remotion/fonts": "4.0.543",
+    "@remotion/paths": "4.0.543",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.543"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

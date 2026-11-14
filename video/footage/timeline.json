@@ -1,0 +1,697 @@
+{
+ "fps": 30,
+ "note": "Frame numbers count from the first frame of each clip. Pointer positions are in page (CSS) pixels: multiply by the clip width / page width for video pixels.",
+ "clips": [
+  {
+   "file": "lab.mp4",
+   "fps": 30,
+   "frames": 738,
+   "width": 2560,
+   "height": 1440,
+   "seconds": 24.6,
+   "capturedFrames": 250,
+   "events": [
+    {
+     "name": "pointer down on the crowd-size slider",
+     "frame": 107,
+     "t": 3.558,
+     "pointer": {
+      "x": 169.72,
+      "y": 141.8203125
+     },
+     "target": {
+      "x": 170,
+      "y": 142
+     },
+     "holders": 10
+    },
+    {
+     "name": "dragging",
+     "frame": 169,
+     "t": 5.619,
+     "pointer": {
+      "x": 178,
+      "y": 142
+     },
+     "holders": 12
+    },
+    {
+     "name": "dragging",
+     "frame": 224,
+     "t": 7.467,
+     "pointer": {
+      "x": 202,
+      "y": 142
+     },
+     "holders": 18
+    },
+    {
+     "name": "dragging",
+     "frame": 283,
+     "t": 9.432,
+     "pointer": {
+      "x": 237,
+      "y": 142
+     },
+     "holders": 35
+    },
+    {
+     "name": "dragging",
+     "frame": 338,
+     "t": 11.263,
+     "pointer": {
+      "x": 261,
+      "y": 142
+     },
+     "holders": 52
+    },
+    {
+     "name": "dragging",
+     "frame": 392,
+     "t": 13.061,
+     "pointer": {
+      "x": 269,
+      "y": 142
+     },
+     "holders": 60
+    },
+    {
+     "name": "pointer up",
+     "frame": 392,
+     "t": 13.064,
+     "pointer": {
+      "x": 269,
+      "y": 142
+     },
+     "holders": 60
+    },
+    {
+     "name": "result for the final size",
+     "frame": 392,
+     "t": 13.071,
+     "pointer": {
+      "x": 269,
+      "y": 142
+     },
+     "reading": "With 60 holders nobody volunteered in 69.8% of 500 rounds; the equilibrium says 66.4%."
+    },
+    {
+     "name": "pointer down on \"Forward-looking\"",
+     "frame": 590,
+     "t": 19.657,
+     "pointer": {
+      "x": 677,
+      "y": 213
+     },
+     "target": {
+      "x": 677,
+      "y": 213
+     }
+    },
+    {
+     "name": "forward-looking result shown",
+     "frame": 618,
+     "t": 20.603,
+     "pointer": {
+      "x": 677,
+      "y": 213
+     },
+     "reading": "If holders value being It, rounds go unsaved at most 1.3% of the time."
+    }
+   ],
+   "facts": {
+    "experiment": "Bystander effect",
+    "from": {
+     "holders": 10,
+     "reading": "With 10 holders nobody volunteered in 2.8% of 500 rounds; the equilibrium says 3.6%."
+    },
+    "to": {
+     "holders": 60,
+     "reading": "With 60 holders nobody volunteered in 69.8% of 500 rounds; the equilibrium says 66.4%."
+    },
+    "forwardLooking": {
+     "reading": "If holders value being It, rounds go unsaved at most 1.3% of the time.",
+     "rows": [
+      [
+       "20",
+       "5%",
+       "0%",
+       "1.3%"
+      ],
+      [
+       "50",
+       "2%",
+       "0%",
+       "1.3%"
+      ],
+      [
+       "100",
+       "1%",
+       "1%",
+       "1.3%"
+      ],
+      [
+       "200above the bound: scripted strategy, 20-round memory",
+       "0.5%",
+       "4%",
+       "1.3%"
+      ]
+     ]
+    }
+   },
+   "recordedAt": "2026-11-14T14:53:27.412Z",
+   "part": "lab",
+   "pageSize": {
+    "width": 1280,
+    "height": 720
+   },
+   "pointerScale": 2.0,
+   "real": false,
+   "kind": "Lab tab of the site: simulation in the browser, no chain"
+  },
+  {
+   "file": "watch.mp4",
+   "fps": 30,
+   "frames": 362,
+   "width": 2560,
+   "height": 1440,
+   "seconds": 12.067,
+   "capturedFrames": 234,
+   "events": [],
+   "facts": {
+    "round": 142,
+    "secondsLeftAtStart": 150,
+    "it": "notit-flaky-mwfnhp461.testnet",
+    "faces": 14,
+    "signedIn": false,
+    "figures": [
+     "cost now: 158.87",
+     "It collects: +485.86"
+    ],
+    "secondsLeftAtEnd": 139
+   },
+   "recordedAt": "2026-11-14T14:59:37.786Z",
+   "part": "session",
+   "pageSize": {
+    "width": 1280,
+    "height": 720
+   },
+   "pointerScale": 2.0,
+   "real": true,
+   "kind": "real session on NEAR testnet (guest-4e4e58bf.testnet on notit-play.testnet)"
+  },
+  {
+   "file": "signup.mp4",
+   "fps": 30,
+   "frames": 397,
+   "width": 2560,
+   "height": 1440,
+   "seconds": 13.234,
+   "capturedFrames": 271,
+   "events": [
+    {
+     "name": "pointer down on \"Play as guest\"",
+     "frame": 91,
+     "t": 3.034,
+     "pointer": {
+      "x": 640,
+      "y": 556
+     },
+     "target": {
+      "x": 640,
+      "y": 556
+     }
+    },
+    {
+     "name": "step: 3/5 Claiming 1,000 NOTIT on Fast",
+     "frame": 113,
+     "t": 3.75,
+     "pointer": {
+      "x": 890,
+      "y": 510
+     }
+    },
+    {
+     "name": "step: 4/5 Claiming 1,000 NOTIT on Live",
+     "frame": 165,
+     "t": 5.512,
+     "pointer": {
+      "x": 890,
+      "y": 510
+     }
+    },
+    {
+     "name": "step: 5/5 Locking the key",
+     "frame": 244,
+     "t": 8.12,
+     "pointer": {
+      "x": 890,
+      "y": 510
+     }
+    },
+    {
+     "name": "signed in",
+     "frame": 297,
+     "t": 9.908,
+     "pointer": {
+      "x": 890,
+      "y": 510
+     },
+     "key": "key: volunteer only",
+     "balance": "1,000.00"
+    }
+   ],
+   "facts": {
+    "round": 142,
+    "account": "guest-4e4e58bf.testnet",
+    "balanceBefore": "\u2014",
+    "buttonLabel": "Play as guest",
+    "signUpSeconds": 6.2,
+    "key": "key: volunteer only",
+    "balanceAfter": "1,000.00",
+    "claimOnFastTx": "5q4xSkuKtZmFGDFeb7GzmhqHhFdnP3PdcPkZ2X57hJfq",
+    "claimOnLiveTx": "9KSLhnLKiyHuKXX31Um2trQCF9b8NwqEWVUtXbriN545",
+    "keySwapTx": "4jYWgkTEav7nehr38ViB85hKMAiKmXew5Ao7nnmFEfsJ"
+   },
+   "recordedAt": "2026-11-14T14:59:37.786Z",
+   "part": "session",
+   "pageSize": {
+    "width": 1280,
+    "height": 720
+   },
+   "pointerScale": 2.0,
+   "real": true,
+   "kind": "real session on NEAR testnet (guest-4e4e58bf.testnet on notit-play.testnet)"
+  },
+  {
+   "file": "volunteer.mp4",
+   "fps": 30,
+   "frames": 556,
+   "width": 2560,
+   "height": 1440,
+   "seconds": 18.534,
+   "capturedFrames": 252,
+   "events": [
+    {
+     "name": "pointer down on \"I'll do it\"",
+     "frame": 242,
+     "t": 8.08,
+     "pointer": {
+      "x": 580,
+      "y": 560
+     },
+     "target": {
+      "x": 580,
+      "y": 560
+     },
+     "costShown": "219.19"
+    },
+    {
+     "name": "\"Sending\" appears",
+     "frame": 266,
+     "t": 8.871,
+     "pointer": {
+      "x": 880,
+      "y": 500
+     },
+     "costFrozenAt": "219.05"
+    },
+    {
+     "name": "confirmed: your face takes the middle seat",
+     "frame": 303,
+     "t": 10.105,
+     "pointer": {
+      "x": 880,
+      "y": 500
+     },
+     "stamp": "You did it"
+    },
+    {
+     "name": "explorer link shown",
+     "frame": 348,
+     "t": 11.61,
+     "pointer": {
+      "x": 880,
+      "y": 500
+     },
+     "link": "https://testnet.nearblocks.io/txns/3sFHyCDFy2qoywtfzbhoirSgYrCt1vBT47m6CV1ZmysX"
+    }
+   ],
+   "facts": {
+    "round": 143,
+    "costShownAtClick": "219.19",
+    "secondsLeftAtClick": 166,
+    "balanceBefore": "1,000.00",
+    "itBefore": "notit-flaky-mwfnhp462.testnet",
+    "confirmSeconds": 1.2,
+    "balanceAfter": "783.26",
+    "burned": "216.73",
+    "volunteerTx": "3sFHyCDFy2qoywtfzbhoirSgYrCt1vBT47m6CV1ZmysX",
+    "burnedSource": "read from the contract after the session (get_account on notit-play.testnet), not from the page: the page had not refreshed this figure when the clip ended"
+   },
+   "recordedAt": "2026-11-14T14:59:37.786Z",
+   "part": "session",
+   "pageSize": {
+    "width": 1280,
+    "height": 720
+   },
+   "pointerScale": 2.0,
+   "real": true,
+   "kind": "real session on NEAR testnet (guest-4e4e58bf.testnet on notit-play.testnet)"
+  },
+  {
+   "file": "unsaved.mp4",
+   "fps": 30,
+   "frames": 859,
+   "width": 2560,
+   "height": 1440,
+   "seconds": 28.634,
+   "capturedFrames": 645,
+   "events": [
+    {
+     "name": "round closes: the clock starts the next round",
+     "frame": 536,
+     "t": 17.87,
+     "pointer": {
+      "x": 1150,
+      "y": 300
+     },
+     "nextRound": 145
+    },
+    {
+     "name": "coins start: red flash, every face pays you",
+     "frame": 555,
+     "t": 18.514,
+     "pointer": {
+      "x": 1150,
+      "y": 300
+     },
+     "payers": 13
+    },
+    {
+     "name": "coins end",
+     "frame": 584,
+     "t": 19.475,
+     "pointer": {
+      "x": 1150,
+      "y": 300
+     }
+    }
+   ],
+   "facts": {
+    "round": 144,
+    "it": "you",
+    "balanceBefore": "783.26",
+    "paidToItBefore": "0.00",
+    "secondsLeftAtStart": 17,
+    "collected": "557.40",
+    "balanceAfter": "1,340.67",
+    "paidToItAfter": "557.40",
+    "paidToItAfterSource": "read from the contract after the session (get_account on notit-play.testnet), not from the page: the page had not refreshed this figure when the clip ended",
+    "payers": 13
+   },
+   "recordedAt": "2026-11-14T14:59:37.786Z",
+   "part": "session",
+   "pageSize": {
+    "width": 1280,
+    "height": 720
+   },
+   "pointerScale": 2.0,
+   "real": true,
+   "kind": "real session on NEAR testnet (guest-4e4e58bf.testnet on notit-play.testnet)"
+  },
+  {
+   "file": "locked.mp4",
+   "fps": 30,
+   "frames": 491,
+   "width": 2560,
+   "height": 1440,
+   "seconds": 16.367,
+   "capturedFrames": 270,
+   "events": [
+    {
+     "name": "pointer rests on the lock line",
+     "frame": 91,
+     "t": 3.018,
+     "pointer": {
+      "x": 552,
+      "y": 567
+     },
+     "target": {
+      "x": 552,
+      "y": 567
+     },
+     "text": "Locked: no access keys \u2197 (opens the block explorer)"
+    },
+    {
+     "name": "pointer down on the Rules tab",
+     "frame": 291,
+     "t": 9.703,
+     "pointer": {
+      "x": 422,
+      "y": 60
+     },
+     "target": {
+      "x": 422,
+      "y": 60
+     }
+    },
+    {
+     "name": "pointer rests on rule 5",
+     "frame": 362,
+     "t": 12.063,
+     "pointer": {
+      "x": 380,
+      "y": 350
+     },
+     "target": {
+      "x": 380,
+      "y": 350
+     },
+     "text": "Nobody can change these rules: the contract has no admin and its account has no keys.Checked just now: this contract account has no access keys."
+    }
+   ],
+   "facts": {
+    "contract": "notit-play.testnet"
+   },
+   "recordedAt": "2026-11-14T14:59:37.786Z",
+   "part": "session",
+   "pageSize": {
+    "width": 1280,
+    "height": 720
+   },
+   "pointerScale": 2.0,
+   "real": true,
+   "kind": "real session on NEAR testnet (guest-4e4e58bf.testnet on notit-play.testnet)"
+  }
+ ],
+ "facts": {
+  "account": "guest-4e4e58bf.testnet",
+  "base": "http://127.0.0.1:4174/",
+  "deviations": [],
+  "contract": "notit-play.testnet",
+  "signup": {
+   "round": 142,
+   "account": "guest-4e4e58bf.testnet",
+   "balanceBefore": "\u2014",
+   "buttonLabel": "Play as guest",
+   "signUpSeconds": 6.2,
+   "key": "key: volunteer only",
+   "balanceAfter": "1,000.00",
+   "claimOnFastTx": "5q4xSkuKtZmFGDFeb7GzmhqHhFdnP3PdcPkZ2X57hJfq"
+  },
+  "volunteer": {
+   "round": 143,
+   "costShownAtClick": "219.19",
+   "secondsLeftAtClick": 166,
+   "balanceBefore": "1,000.00",
+   "itBefore": "notit-flaky-mwfnhp462.testnet",
+   "confirmSeconds": 1.2,
+   "balanceAfter": "783.26",
+   "burned": "216.73",
+   "volunteerTx": "3sFHyCDFy2qoywtfzbhoirSgYrCt1vBT47m6CV1ZmysX",
+   "burnedSource": "read from the contract after the session (get_account on notit-play.testnet), not from the page: the page had not refreshed this figure when the clip ended"
+  },
+  "unsaved": {
+   "round": 144,
+   "it": "you",
+   "balanceBefore": "783.26",
+   "paidToItBefore": "0.00",
+   "secondsLeftAtStart": 17,
+   "collected": "557.40",
+   "balanceAfter": "1,340.67",
+   "paidToItAfter": "557.40",
+   "paidToItAfterSource": "read from the contract after the session (get_account on notit-play.testnet), not from the page: the page had not refreshed this figure when the clip ended"
+  },
+  "chain": {
+   "account": "guest-4e4e58bf.testnet",
+   "contracts": [
+    {
+     "id": "notit-play.testnet",
+     "label": "Fast",
+     "note": "3-minute rounds"
+    },
+    {
+     "id": "notit-live.testnet",
+     "label": "Live",
+     "note": "1-hour rounds"
+    }
+   ],
+   "transactions": {
+    "volunteer": "3sFHyCDFy2qoywtfzbhoirSgYrCt1vBT47m6CV1ZmysX",
+    "keySwap": "4jYWgkTEav7nehr38ViB85hKMAiKmXew5Ao7nnmFEfsJ",
+    "claimOnLive": "9KSLhnLKiyHuKXX31Um2trQCF9b8NwqEWVUtXbriN545",
+    "claimOnFast": "5q4xSkuKtZmFGDFeb7GzmhqHhFdnP3PdcPkZ2X57hJfq",
+    "accountCreated": "EPWcu1Cd4vPvLiRzJx4UMkBFz2Nw1VZNpzdn96QjMqk8"
+   },
+   "source": {
+    "transactions": "api-testnet.nearblocks.io account transaction list, read after the session",
+    "keys": "view_access_key_list on near-testnet.drpc.org, finality final"
+   },
+   "accessKeys": {
+    "blockHeight": 277695749,
+    "keys": [
+     {
+      "publicKey": "ed25519:B4HpFuYQKMaGmgxJNwjjj9FA3cwWUfrbBfPCYTNMPveG",
+      "permission": {
+       "FunctionCall": {
+        "allowance": "249700040421056600000000",
+        "method_names": [
+         "volunteer",
+         "poke"
+        ],
+        "receiver_id": "notit-play.testnet"
+       }
+      }
+     },
+     {
+      "publicKey": "ed25519:DH5zCGXd59db7wr8v958NtuJSX8xiJj981rhjN4M9PXo",
+      "permission": {
+       "FunctionCall": {
+        "allowance": "250000000000000000000000",
+        "method_names": [
+         "volunteer",
+         "poke"
+        ],
+        "receiver_id": "notit-live.testnet"
+       }
+      }
+     }
+    ]
+   },
+   "accountOnContracts": {
+    "notit-play.testnet": {
+     "readAtBlock": 277695777,
+     "raw": {
+      "registered": true,
+      "claimed": true,
+      "balance": "61134180417316959612",
+      "saves": 1,
+      "burned": "216731396486269180960",
+      "collected": "557409467162946669511",
+      "is_it": false
+     },
+     "saves": 1,
+     "burned": "216.73",
+     "paidToIt": "557.40",
+     "balanceNow": "61.13",
+     "claimed": true,
+     "isItNow": false
+    },
+    "notit-live.testnet": {
+     "readAtBlock": 277695777,
+     "raw": {
+      "registered": true,
+      "claimed": true,
+      "balance": "999999999999999999999",
+      "saves": 0,
+      "burned": "0",
+      "collected": "0",
+      "is_it": false
+     },
+     "saves": 0,
+     "burned": "0.00",
+     "paidToIt": "0.00",
+     "balanceNow": "999.99",
+     "claimed": true,
+     "isItNow": false
+    }
+   }
+  },
+  "realSession": {
+   "what": "One real session on NEAR testnet: account guest-4e4e58bf.testnet on the locked contract notit-play.testnet (and its claim on notit-live.testnet). Clips watch, signup, volunteer, unsaved and locked are that session, filmed in real time. The clip lab is the Lab tab of the same site (simulation in the browser, no chain).",
+   "account": "guest-4e4e58bf.testnet",
+   "contracts": {
+    "fast": "notit-play.testnet",
+    "live": "notit-live.testnet"
+   },
+   "transactions": {
+    "volunteer": "3sFHyCDFy2qoywtfzbhoirSgYrCt1vBT47m6CV1ZmysX",
+    "keySwap": "4jYWgkTEav7nehr38ViB85hKMAiKmXew5Ao7nnmFEfsJ",
+    "claimOnLive": "9KSLhnLKiyHuKXX31Um2trQCF9b8NwqEWVUtXbriN545",
+    "claimOnFast": "5q4xSkuKtZmFGDFeb7GzmhqHhFdnP3PdcPkZ2X57hJfq",
+    "accountCreated": "EPWcu1Cd4vPvLiRzJx4UMkBFz2Nw1VZNpzdn96QjMqk8"
+   },
+   "rounds": {
+    "watch": 142,
+    "signup": 142,
+    "volunteer": 143,
+    "unsaved": 144
+   },
+   "costShownAtClick": "219.19",
+   "costFrozenWhileSending": "219.05",
+   "burned": "216.73",
+   "paidToIt": "557.40",
+   "balances": {
+    "afterSignUp": "1,000.00",
+    "beforeVolunteer": "1,000.00",
+    "afterVolunteer": "783.26",
+    "beforeUnsavedRound": "783.26",
+    "afterUnsavedRound": "1,340.67"
+   },
+   "keysAfterSignUp": {
+    "blockHeight": 277695749,
+    "keys": [
+     {
+      "publicKey": "ed25519:B4HpFuYQKMaGmgxJNwjjj9FA3cwWUfrbBfPCYTNMPveG",
+      "permission": {
+       "FunctionCall": {
+        "allowance": "249700040421056600000000",
+        "method_names": [
+         "volunteer",
+         "poke"
+        ],
+        "receiver_id": "notit-play.testnet"
+       }
+      }
+     },
+     {
+      "publicKey": "ed25519:DH5zCGXd59db7wr8v958NtuJSX8xiJj981rhjN4M9PXo",
+      "permission": {
+       "FunctionCall": {
+        "allowance": "250000000000000000000000",
+        "method_names": [
+         "volunteer",
+         "poke"
+        ],
+        "receiver_id": "notit-live.testnet"
+       }
+      }
+     }
+    ]
+   },
+   "figuresReadFromChainAfterwards": {
+    "burned": "read from the contract after the session (get_account on notit-play.testnet), not from the page: the page had not refreshed this figure when the clip ended",
+    "paidToIt": "the page showed \"you collected 557.40\" during the clip; the contract reports the same total"
+   }
+  }
+ },
+ "problems": [],
+ "writtenAt": "2026-11-14T18:46:11.858510Z",
+ "dropped": [
+  "phone",
+  "demo-seat-swap",
+  "demo-unsaved",
+  "demo-asleep"
+ ]
+}

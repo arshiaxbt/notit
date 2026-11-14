@@ -8,7 +8,7 @@ A memecoin whose only mechanic is a recurring auction for one seat, "It": a volu
 
 [![The live round on NEAR testnet: countdown, falling cost, who is It](docs/media/play-testnet.png)](https://arshiaxbt.github.io/notit/)
 
-A 70-second recording of one real session on testnet (claim, volunteer, a round nobody saves): [docs/media/demo.mp4](docs/media/demo.mp4).
+Demo film, 51 seconds: [docs/media/demo.mp4](docs/media/demo.mp4). It is cut from one real session on testnet (`guest-4e4e58bf.testnet` on `notit-play.testnet`, rounds 142–144: claim, volunteer, a round nobody saves); the figures on screen are that session's, and the Lab shot is labelled as a simulation. The account was created and funded before the take. The film's source is in [`video/`](video/), with the session's facts and transaction hashes in [`video/footage/timeline.json`](video/footage/timeline.json). An earlier unedited screen recording of another session: [docs/media/session.mp4](docs/media/session.mp4).
 
 | | |
 |---|---|
@@ -218,6 +218,7 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 | `docs/MECHANISM.md` | Incentives, equilibrium analysis, parameters, limits |
 | `scripts/` | `deploy.sh`, `lock.sh` |
 | `docs/media/` | Demo video and screenshots |
+| `video/` | Source of the demo film (Remotion); not needed to run anything |
 | `contract/deployed/` | The WebAssembly that is on chain |
 
 ## How correctness is checked

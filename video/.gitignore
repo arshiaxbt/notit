@@ -1,0 +1,12 @@
+node_modules/
+out/
+stills/
+.cache/
+.remotion/
+*.log
+# Footage plates are large binaries: recorded into footage/ and mirrored into public/footage/ by scripts/gen-footage.mjs
+footage/*.mp4
+footage/*.webm
+footage/*.mkv
+public/footage/
+public/standin/
