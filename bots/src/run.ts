@@ -33,6 +33,18 @@ function log(message: string): void {
 
 let lastRound = -1;
 
+/** Balances and It flags, read once per round and again after one of our own transactions. */
+let accounts: { balance: bigint; isIt: boolean }[] | null = null;
+
+async function readAccounts(): Promise<{ balance: bigint; isIt: boolean }[]> {
+  const views = [];
+  for (const bot of fleet.bots) {
+    const acct = await getAccount(fleet.contractId, bot.accountId);
+    views.push({ balance: BigInt(acct.balance), isIt: acct.is_it });
+  }
+  return views;
+}
+
 /**
  * Fleet housekeeping, not part of the game's rules: the bots share one operator, and a
  * small closed crowd ends with one account holding almost everything, after which nobody
@@ -41,9 +53,8 @@ let lastRound = -1;
  * every bot under 8 % is topped up to 12 %.
  */
 async function redeal(): Promise<void> {
-  const balances = await Promise.all(
-    fleet.bots.map(async (bot) => BigInt((await getAccount(fleet.contractId, bot.accountId)).balance)),
-  );
+  accounts = await readAccounts();
+  const balances = accounts.map((a) => a.balance);
   const total = balances.reduce((a, b) => a + b, 0n);
   if (total === 0n) return;
   const richest = balances.reduce((best, b, i) => (b > balances[best] ? i : best), 0);
@@ -56,6 +67,7 @@ async function redeal(): Promise<void> {
       const rich = fleet.bots[richest];
       await transfer(signer(rich.accountId, rich.secretKey), fleet.contractId, bot.accountId, amount);
       log(`  re-deal: ${rich.accountId} sent ${fmt(amount)} NOTIT to ${bot.accountId}`);
+      accounts = null;
     } catch (error) {
       log(`  re-deal to ${bot.accountId} failed: ${reason(error)}`);
     }
@@ -80,13 +92,13 @@ async function pass(): Promise<void> {
   const progress = Number((elapsed * 1000n) / roundNs) / 1000;
   const cost = BigInt(state.cost_now);
 
+  accounts ??= await readAccounts();
   for (const [i, bot] of fleet.bots.entries()) {
     const strategy = STRATEGIES[bot.strategy];
     if (!strategy) continue;
-    const acct = await getAccount(fleet.contractId, bot.accountId);
-    const balance = BigInt(acct.balance);
+    const { balance, isIt } = accounts[i];
     if (balance < cost) continue;
-    const wants = strategy({ state, config, balance, isIt: acct.is_it, progress, roll: roll(state.round, i) });
+    const wants = strategy({ state, config, balance, isIt, progress, roll: roll(state.round, i) });
     if (!wants) continue;
     try {
       // The cost only falls within a round, so the cost just read is a safe ceiling.
@@ -95,6 +107,7 @@ async function pass(): Promise<void> {
     } catch (error) {
       log(`  ${bot.accountId} (${bot.strategy}) was refused: ${reason(error)}`);
     }
+    accounts = null; // our balance or It changed, or somebody beat us: read again next pass
     return; // one attempt per pass; the round is saved or the next pass tries again
   }
 }

@@ -42,6 +42,17 @@ Not It is built so that every event is a real transfer of ownership. A save move
 - **Named accounts.** It, the volunteers and the bots are readable account names on the hero wall.
 - **NEAR Sandbox** runs the compiled contract in the integration test.
 
+| NEAR feature | Where it is used | How to check |
+|---|---|---|
+| Account with no access keys | Both deployments are immutable | Try it, step 4 |
+| NEP-141, NEP-145, NEP-148 | The token, storage registration, metadata | `ft_metadata`, `ft_balance_of`, `storage_balance_bounds` on either contract |
+| NEP-297 events | Every claim, burn, save and collapse | Transaction logs on the explorer; Try it, step 6 |
+| NEP-330 source metadata | The contract reports this repository | Try it, step 4 |
+| Calls without a deposit | `volunteer` and `poke` take no deposit, so a function-call access key can play | `contract/src/lib.rs`, `volunteer` |
+| Faucet-funded accounts | One-click guest play in the web app | Try it, step 5 |
+| NEAR Connect | Wallet login in the web app | "Connect a wallet" in the app |
+| NEAR Sandbox | Integration test on the compiled contract | Try it, step 3 |
+
 ## Try it
 
 Run every command from the repository root unless a step says otherwise. Steps 1 and 2 need only Node 22.18 or newer (the TypeScript sources run directly, with no build step). No keys, no accounts, no network after `npm ci`.
@@ -136,7 +147,29 @@ Open https://arshiaxbt.github.io/notit/.
 5. Switch to **Demo** in the header for the same game simulated in your browser on a fast clock, with no network.
 6. Open the **Lab** tab and move the crowd-size slider. You should see the failure rate rise with the crowd, next to the theory curve.
 
-### 6. Run the web app locally
+### 6. Play from the command line
+
+The game needs no web app: it is three contract calls. With the [NEAR CLI](https://github.com/near/near-cli-rs) and a testnet account (`near account create-account sponsor-by-faucet-service <you>.testnet autogenerate-new-keypair save-to-legacy-keychain network-config testnet create`):
+
+```sh
+# Claim 1,000 NOTIT (the deposit is the fixed storage fee)
+near contract call-function as-transaction notit-play.testnet claim json-args '{}' \
+  prepaid-gas '30 Tgas' attached-deposit '0.005 NEAR' \
+  sign-as <you>.testnet network-config testnet sign-with-legacy-keychain send
+
+# Volunteer: burn the current cost and become It (no deposit)
+near contract call-function as-transaction notit-play.testnet volunteer json-args '{}' \
+  prepaid-gas '30 Tgas' attached-deposit '0 NEAR' \
+  sign-as <you>.testnet network-config testnet sign-with-legacy-keychain send
+
+# Read your account
+near contract call-function as-read-only notit-play.testnet get_account \
+  json-args '{"account_id":"<you>.testnet"}' network-config testnet now
+```
+
+After the claim you should see an `ft_mint` event for `1000000000000000000000` in the logs. After volunteering you should see `ft_burn` and `round_saved` events, and `get_account` should return `"is_it": true`. If somebody already saved the round, the call fails with `ERR_ALREADY_SAVED` and costs you nothing; if the round opened before anybody held tokens, it fails with `ERR_NOTHING_TO_SAVE`.
+
+### 7. Run the web app locally
 
 ```sh
 npm run dev

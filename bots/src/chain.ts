@@ -3,7 +3,10 @@
 import { Account, FailoverRpcProvider, JsonRpcProvider, KeyPair, teraToGas } from "near-api-js";
 import type { KeyPairString } from "near-api-js";
 
-export const RPC_URLS = (process.env.NEAR_RPC_URLS ?? "https://test.rpc.fastnear.com,https://rpc.testnet.near.org")
+export const RPC_URLS = (
+  process.env.NEAR_RPC_URLS ??
+  "https://test.rpc.fastnear.com,https://near-testnet.drpc.org,https://api.zan.top/near-testnet,https://testnet-rpc.intea.rs"
+)
   .split(",")
   .map((url) => url.trim())
   .filter(Boolean);

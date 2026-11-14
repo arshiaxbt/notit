@@ -2,7 +2,9 @@
   "network": "testnet",
   "rpcUrls": [
     "https://test.rpc.fastnear.com",
-    "https://rpc.testnet.near.org"
+    "https://near-testnet.drpc.org",
+    "https://api.zan.top/near-testnet",
+    "https://testnet-rpc.intea.rs"
   ],
   "faucetUrl": "https://helper.nearprotocol.com/account",
   "explorer": "https://testnet.nearblocks.io",
