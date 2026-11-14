@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Contract (unit + sandbox)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contract
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain (from contract/rust-toolchain.toml)
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contract
+      - name: Install cargo-near
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/download/cargo-near-v0.23.0/cargo-near-installer.sh | sh
+      - name: Format
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Unit tests and sandbox integration test
+        run: cargo test
+
+  engine-and-web:
+    name: Engine, lab and web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npm run typecheck
+      - name: Engine tests
+        run: npm test
+      - name: Lab output is reproducible
+        run: |
+          npm run --silent lab > /tmp/lab.txt
+          diff -u docs/lab-output.txt /tmp/lab.txt
+      - name: Differential scenarios are reproducible
+        run: |
+          npm run scenarios
+          git diff --exit-code engine/out/scenarios.json
+      - name: Web tests and build
+        run: |
+          npm test -w web
+          npm run build:web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist

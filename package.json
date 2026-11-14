@@ -1,0 +1,24 @@
+{
+  "name": "notit",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Not It ($NOTIT): a volunteer's-dilemma memecoin on NEAR",
+  "license": "MIT",
+  "workspaces": [
+    "engine",
+    "web",
+    "bots"
+  ],
+  "scripts": {
+    "lab": "npm run lab -w engine --silent",
+    "test": "npm test -w engine",
+    "typecheck": "npm run typecheck -w engine && npm run typecheck -w bots && npm run typecheck -w web",
+    "build:web": "npm run build -w web",
+    "dev": "npm run dev -w web",
+    "scenarios": "npm run scenarios -w engine --silent",
+    "status": "node bots/src/status.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

@@ -1,0 +1,58 @@
+/* Design tokens. Neutral paper, ink, one accent (playground yellow) that is
+   kept for the slab and a few marks, and a red used only for "everyone pays". */
+:root {
+  --font: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', ui-rounded, system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --accent: #ffd60a;
+  --accent-ink: #16130c;
+  --accent-ink-2: #4a4334;
+
+  --paper: #f4f2ec;
+  --surface: #ffffff;
+  --surface-2: #e9e5d8;
+  --ink: #16130c;
+  --ink-2: #4a4334;
+  --muted: #6a6558;
+  --line: #16130c;
+  --hair: rgba(22, 19, 12, 0.16);
+  --cut: #c81e2f;
+  --cut-soft: #ffe1dd;
+  --shadow-color: #16130c;
+  --focus: #16130c;
+
+  /* Words are set at normal width; every live number is set condensed. */
+  --num-stretch: 75%;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --border: 2.5px;
+  --shadow: 5px 5px 0 var(--shadow-color);
+  --shadow-sm: 3px 3px 0 var(--shadow-color);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --paper: #14120d;
+  --surface: #1f1c14;
+  --surface-2: #2b2618;
+  --ink: #fff4d6;
+  --ink-2: #d9cfb3;
+  --muted: #a69c82;
+  --line: #6f664c;
+  --hair: rgba(255, 244, 214, 0.16);
+  --cut: #ff6b6b;
+  --cut-soft: #3b1614;
+  --shadow-color: #000000;
+  --focus: #fff4d6;
+  color-scheme: dark;
+}

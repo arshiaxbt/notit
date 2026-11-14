@@ -1,0 +1,23 @@
+{
+  "name": "@notit/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Not It ($NOTIT) rules engine and simulation lab (TypeScript, BigInt)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "lab": "node src/lab.ts",
+    "scenarios": "node src/scenarios.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

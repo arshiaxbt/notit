@@ -1,0 +1,17 @@
+node_modules/
+target/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+neardev/
+.near-credentials/
+web/test-results/
+web/playwright-report/
+.bots*.json
+.near-credentials/
+.scratch/
+web/screenshots/
+web/.video/

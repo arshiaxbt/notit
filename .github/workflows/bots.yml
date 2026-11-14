@@ -1,0 +1,44 @@
+name: Bots
+
+# Keeps the testnet deployments alive: a small fleet of strategy bots plays each
+# deployment so that rounds are sometimes saved and sometimes not. Each fleet's
+# testnet keys come from a repository secret (BOTS_FAST_JSON, BOTS_LIVE_JSON;
+# see bots/README.md). Testnet keys only.
+
+on:
+  schedule:
+    - cron: "5 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    name: Play ${{ matrix.fleet }} for about six hours
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        fleet: [FAST, LIVE]
+    concurrency:
+      group: bots-${{ matrix.fleet }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run the fleet
+        env:
+          BOTS_JSON: ${{ secrets[format('BOTS_{0}_JSON', matrix.fleet)] }}
+          RUN_SECONDS: "20700"
+        run: |
+          if [ -z "$BOTS_JSON" ]; then
+            echo "No fleet secret for this deployment; nothing to do."
+            exit 0
+          fi
+          node bots/src/run.ts

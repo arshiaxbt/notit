@@ -1,0 +1,78 @@
+NOT IT - SIMULATION LAB
+
+A. Bystander effect - N equal players, all mixedFinalBlock, 2000 independent one-round trials each (seed 1001)
+   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost.
+   q = c / (cut * x);  p = 1 - q^(1/(N-1));  theory P(fail) = q^(N/(N-1)), or 1 if q >= 1
+
+  N       q       p  theory P(fail)  simulated     diff
+---  ------  ------  --------------  ---------  -------
+  3  0.0533  0.7692          0.0123     0.0095  -0.0028
+  5  0.0799  0.4684          0.0425     0.0460  +0.0035
+ 10  0.1464  0.1922          0.1183     0.1110  -0.0073
+ 20  0.2796  0.0649          0.2614     0.2710  +0.0096
+ 30  0.4127  0.0301          0.4003     0.3995  -0.0008
+ 45  0.6124  0.0111          0.6056     0.6050  -0.0006
+ 60  0.8121  0.0035          0.8093     0.7930  -0.0163
+ 75  1.0118  0.0000          1.0000     1.0000   0.0000
+100  1.3446  0.0000          1.0000     1.0000   0.0000
+
+B. Who pays - 50 holders, Pareto balances (alpha 1.16), 500 rounds per strategy (seed 2002)
+   Both runs start armed: the largest holder (holder-14) volunteered in a setup round.
+   At the start: supply 16,301.31 NOTIT, Gini 0.5015, top 5 holders own 44.7%.
+
+                                               rationalTimer  throneAware
+---------------------------------------------  -------------  -----------
+Rounds saved                                          100.0%       100.0%
+Rounds collapsed (cut paid to It)                       0.0%         0.0%
+Rounds dormant (nothing charged)                        0.0%         0.0%
+Average fraction of the round left when saved         0.0224       0.0224
+Share of all burns paid by the top 5 holders           54.0%        54.0%
+Share of all saves made by the top 5 holders           24.8%        24.8%
+Total burned by volunteers (NOTIT)                 12,814.50    12,814.50
+Total paid to It, net of It's own cut (NOTIT)           0.00         0.00
+Gini at start                                         0.5015       0.5015
+Gini at end                                           0.1629       0.1629
+Supply share of the top 5 holders at end               10.4%        10.4%
+Supply share of It at end                               2.0%         2.0%
+Supply at end (NOTIT)                               3,486.81     3,486.81
+
+   The two columns are identical: with large holders present no round ever fails, so the throne is worth nothing.
+
+   Cold start (no setup round, nobody is It):
+   rationalTimer  0.0% saved, 100.0% dormant (nobody ever volunteers)
+   throneAware    99.8% saved, 0.2% dormant (first volunteer in round 2)
+
+B2. A dispersed crowd - 100 equal holders (1.00% of the supply each), 500 rounds per strategy (seed 2502)
+   Both runs start armed: holder-100 volunteered in a setup round. Nobody holds the 1.33% that makes a myopic save worth it.
+   At the start: supply 99,799.90 NOTIT, Gini 0.0020.
+
+                                               rationalTimer  throneAware
+---------------------------------------------  -------------  -----------
+Rounds saved                                            0.0%        99.0%
+Rounds collapsed (cut paid to It)                       1.6%         1.0%
+Rounds dormant (nothing charged)                       98.4%         0.0%
+Average fraction of the round left when saved            n/a       0.0476
+Share of all burns paid by the top 5 holders             n/a         2.0%
+Share of all saves made by the top 5 holders             n/a         6.5%
+Total burned by volunteers (NOTIT)                      0.00    88,006.83
+Total paid to It, net of It's own cut (NOTIT)      72,023.43    41,334.02
+Gini at start                                         0.0020       0.0020
+Gini at end                                           0.7197       0.2277
+Supply share of the top 5 holders at end                1.4%         7.2%
+Supply share of It at end                              73.0%         1.3%
+Supply at end (NOTIT)                              99,799.89    11,793.06
+
+C. The idle get taxed - 40 holders (4 altruist, 6 sniper, 30 freeRider), 1000 rounds (seed 3003)
+
+Failure rate                                    19.3% (807 saved, 193 collapsed, 0 dormant)
+Longest streak of saved rounds                  97
+Supply at start (NOTIT)                         40,000.00
+Supply at end (NOTIT)                           7,323.17
+Total paid to It, net of It's own cut (NOTIT)   30,278.16
+Balance share of the free riders, start -> end  75.0% -> 0.0%
+
+strategy   holders  saves  burned (NOTIT)  collected (NOTIT)  rejected  missed  start share  end share
+---------  -------  -----  --------------  -----------------  --------  ------  -----------  ---------
+altruist         4     12        3,889.90               0.00      1154       0        10.0%       0.0%
+sniper           6    795       28,786.92          30,278.16      2206     792        15.0%     100.0%
+freeRider       30      0            0.00               0.00         0       0        75.0%       0.0%

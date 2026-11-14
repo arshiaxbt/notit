@@ -1,0 +1,266 @@
+{
+  "bystander": {
+    "trials": 2000,
+    "seed": 1001,
+    "rows": [
+      {
+        "n": 3,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "7987983996000000000",
+        "q": 0.05325322664,
+        "p": 0.7692333935769735,
+        "theory": 0.012289066392789108,
+        "simulated": 0.0095,
+        "diff": -0.0027890663927891083,
+        "trials": 2000,
+        "failed": 19
+      },
+      {
+        "n": 5,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "11981975994000000000",
+        "q": 0.07987983995999999,
+        "p": 0.46837022496379777,
+        "theory": 0.04246650134786263,
+        "simulated": 0.046,
+        "diff": 0.003533498652137368,
+        "trials": 2000,
+        "failed": 92
+      },
+      {
+        "n": 10,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "21966955989000000000",
+        "q": 0.14644637325999998,
+        "p": 0.19221157727935612,
+        "theory": 0.11829768486885406,
+        "simulated": 0.111,
+        "diff": -0.007297684868854057,
+        "trials": 2000,
+        "failed": 222
+      },
+      {
+        "n": 20,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "41936915979000000000",
+        "q": 0.27957943986,
+        "p": 0.06487709164808342,
+        "theory": 0.261441138917283,
+        "simulated": 0.271,
+        "diff": 0.00955886108271703,
+        "trials": 2000,
+        "failed": 542
+      },
+      {
+        "n": 30,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "61906875969000000000",
+        "q": 0.41271250645999996,
+        "p": 0.030056426323538887,
+        "theory": 0.4003078434167819,
+        "simulated": 0.3995,
+        "diff": -0.0008078434167818616,
+        "trials": 2000,
+        "failed": 799
+      },
+      {
+        "n": 45,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "91861815954000000000",
+        "q": 0.61241210636,
+        "p": 0.011082446860412931,
+        "theory": 0.6056250817345917,
+        "simulated": 0.605,
+        "diff": -0.0006250817345917481,
+        "trials": 2000,
+        "failed": 1210
+      },
+      {
+        "n": 60,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "121816755939000000000",
+        "q": 0.81211170626,
+        "p": 0.003521199189988944,
+        "theory": 0.8092520991777367,
+        "simulated": 0.793,
+        "diff": -0.016252099177736623,
+        "trials": 2000,
+        "failed": 1586
+      },
+      {
+        "n": 75,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "151771695924000000000",
+        "q": 1.01181130616,
+        "p": 0,
+        "theory": 1,
+        "simulated": 1,
+        "diff": 0,
+        "trials": 2000,
+        "failed": 2000
+      },
+      {
+        "n": 100,
+        "playerBalance": "1000000000000000000000",
+        "finalCost": "201696595899000000000",
+        "q": 1.34464397266,
+        "p": 0,
+        "theory": 1,
+        "simulated": 1,
+        "diff": 0,
+        "trials": 2000,
+        "failed": 2000
+      }
+    ]
+  },
+  "whoPays": {
+    "holders": 50,
+    "rounds": 500,
+    "seed": 2002,
+    "alpha": 1.16,
+    "top": 5,
+    "initialIt": "holder-14",
+    "supplyStart": "16301315666000000000000",
+    "giniStart": 0.501508560424438,
+    "topSupplyShareStart": 0.4469771529666911,
+    "runs": [
+      {
+        "strategy": "rationalTimer",
+        "savedShare": 1,
+        "collapsedShare": 0,
+        "dormantShare": 0,
+        "avgSecondsLeftFraction": 0.02242105263767708,
+        "topBurnShare": 0.5402250546116021,
+        "topSaveShare": 0.248,
+        "totalBurned": "12814504342814087114666",
+        "totalPaid": "0",
+        "giniEnd": 0.16285974571673623,
+        "supplyEnd": "3486811323185912885334",
+        "topSupplyShareEnd": 0.10427847218599312,
+        "itSupplyShareEnd": 0.019658700214983903
+      },
+      {
+        "strategy": "throneAware",
+        "savedShare": 1,
+        "collapsedShare": 0,
+        "dormantShare": 0,
+        "avgSecondsLeftFraction": 0.02242105263767708,
+        "topBurnShare": 0.5402250546116021,
+        "topSaveShare": 0.248,
+        "totalBurned": "12814504342814087114666",
+        "totalPaid": "0",
+        "giniEnd": 0.16285974571673623,
+        "supplyEnd": "3486811323185912885334",
+        "topSupplyShareEnd": 0.10427847218599312,
+        "itSupplyShareEnd": 0.019658700214983903
+      }
+    ],
+    "coldStart": [
+      {
+        "strategy": "rationalTimer",
+        "savedShare": 0,
+        "dormantShare": 1,
+        "firstSavedRound": null
+      },
+      {
+        "strategy": "throneAware",
+        "savedShare": 0.998,
+        "dormantShare": 0.002,
+        "firstSavedRound": 2
+      }
+    ]
+  },
+  "dispersed": {
+    "holders": 100,
+    "rounds": 500,
+    "seed": 2502,
+    "top": 5,
+    "initialIt": "holder-100",
+    "supplyStart": "99799900000000000000000",
+    "giniStart": 0.0019849619087795034,
+    "topSupplyShareStart": 0.050100250601453504,
+    "runs": [
+      {
+        "strategy": "rationalTimer",
+        "savedShare": 0,
+        "collapsedShare": 0.016,
+        "dormantShare": 0.984,
+        "avgSecondsLeftFraction": null,
+        "topBurnShare": 0,
+        "topSaveShare": 0,
+        "totalBurned": "0",
+        "totalPaid": "72023438021132812500000",
+        "giniEnd": 0.719693496898623,
+        "supplyEnd": "99799899999999999999997",
+        "topSupplyShareEnd": 0.013651843590978674,
+        "itSupplyShareEnd": 0.7296934968986223
+      },
+      {
+        "strategy": "throneAware",
+        "savedShare": 0.99,
+        "collapsedShare": 0.01,
+        "dormantShare": 0,
+        "avgSecondsLeftFraction": 0.047634237113647636,
+        "topBurnShare": 0.02014587915351864,
+        "topSaveShare": 0.06464646464646465,
+        "totalBurned": "88006837795045740914499",
+        "totalPaid": "41334028250399821375843",
+        "giniEnd": 0.22765406976114866,
+        "supplyEnd": "11793062204954259085362",
+        "topSupplyShareEnd": 0.07185630128572325,
+        "itSupplyShareEnd": 0.013281879051419641
+      }
+    ]
+  },
+  "mixedCrowd": {
+    "holders": 40,
+    "rounds": 1000,
+    "seed": 3003,
+    "failureRate": 0.193,
+    "saved": 807,
+    "collapsed": 193,
+    "dormant": 0,
+    "longestStreak": 97,
+    "supplyStart": "40000000000000000000000",
+    "supplyEnd": "7323170266866704730790",
+    "totalBurned": "32676829733133295269184",
+    "totalPaid": "30278168211068894900652",
+    "freeRiderShareStart": 0.75,
+    "freeRiderShareEnd": 9.778557153586313e-14,
+    "groups": [
+      {
+        "strategy": "altruist",
+        "count": 4,
+        "saves": 12,
+        "burned": "3889903574418793846001",
+        "collected": "0",
+        "rejected": 1154,
+        "missed": 0,
+        "shareStart": 0.1,
+        "shareEnd": 2.795999444754231e-16
+      },
+      {
+        "strategy": "sniper",
+        "count": 6,
+        "saves": 795,
+        "burned": "28786926158714501423183",
+        "collected": "30278168211068894900652",
+        "rejected": 2206,
+        "missed": 792,
+        "shareStart": 0.15,
+        "shareEnd": 0.999999999999902
+      },
+      {
+        "strategy": "freeRider",
+        "count": 30,
+        "saves": 0,
+        "burned": "0",
+        "collected": "0",
+        "rejected": 0,
+        "missed": 0,
+        "shareStart": 0.75,
+        "shareEnd": 9.778557153586313e-14
+      }
+    ]
+  }
+}

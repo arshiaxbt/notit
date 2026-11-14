@@ -1,0 +1,21 @@
+{
+  "network": "testnet",
+  "rpcUrls": [
+    "https://test.rpc.fastnear.com",
+    "https://rpc.testnet.near.org"
+  ],
+  "faucetUrl": "https://helper.nearprotocol.com/account",
+  "explorer": "https://testnet.nearblocks.io",
+  "contracts": [
+    {
+      "id": "notit-play.testnet",
+      "label": "Fast",
+      "note": "3-minute rounds"
+    },
+    {
+      "id": "notit-live.testnet",
+      "label": "Live",
+      "note": "1-hour rounds"
+    }
+  ]
+}

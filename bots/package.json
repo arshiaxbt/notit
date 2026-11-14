@@ -1,0 +1,21 @@
+{
+  "name": "@notit/bots",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Strategy bots that keep a Not It testnet deployment alive",
+  "scripts": {
+    "setup": "node src/setup.ts",
+    "tick": "node src/run.ts --once",
+    "run": "node src/run.ts",
+    "status": "node src/status.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "near-api-js": "^7.5.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
