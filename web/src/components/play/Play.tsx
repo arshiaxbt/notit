@@ -6,9 +6,8 @@ import type { ChainUi } from '../../hooks/useSession';
 import type { Mode } from '../Header';
 import { useFlash } from '../ui';
 import { ChainBar } from './Chain';
-import { HeroSlab } from './HeroSlab';
-import { Stats, Throne, You } from './Panels';
-import { Crowd, HeroWall, RoundLog, RoundStrip } from './Rounds';
+import { HeroWall, RoundStrip } from './Rounds';
+import { Figures, Scene, StageShell } from './Scene';
 
 interface Props {
   game: Game;
@@ -35,7 +34,6 @@ function DemoBar({ demo, game, onRestart }: { demo: DemoControls; game: Game; on
   };
   return (
     <div className="demobar">
-      <p className="demobar__text">Demo: simulated crowd</p>
       <div className="demobar__controls">
         <div className="seg" role="group" aria-label="How long a round takes">
           <span className="seg__label" aria-hidden="true">
@@ -55,26 +53,6 @@ function DemoBar({ demo, game, onRestart }: { demo: DemoControls; game: Game; on
   );
 }
 
-function Skeleton() {
-  return (
-    <div className="play" aria-busy="true">
-      <div className="slab slab--loading">
-        <p className="slab__ticker">
-          <span className="slab__stamp">Loading</span>
-        </p>
-        <div className="slab__body">
-          <div className="slab__clock">
-            <h2 className="slab__round">Round</h2>
-            <div className="countdown" aria-hidden="true">
-              –:––
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Play({ game, mode, demo, chain, onRestartDemo, onUseDemo, onShowRules }: Props) {
   const snap = game.snapshot;
   const flash = useFlash(game.lastClose, 3600);
@@ -87,64 +65,52 @@ export function Play({ game, mode, demo, chain, onRestartDemo, onUseDemo, onShow
 
   if (!snap) {
     if (game.error) {
+      // One line, and a way out: try again, or play the demo.
       return (
         <div className="play">
-          <div className="notice" role="alert">
-            <h2>Could not reach NEAR testnet</h2>
-            <p>{game.error}</p>
-            <div className="notice__actions">
-              <button type="button" className="btn" onClick={() => void game.refresh()}>
-                Try again
-              </button>
+          <StageShell line="no answer from the network">
+            <button type="button" className="act" onClick={() => void game.refresh()}>
+              <span className="act__label">Try again</span>
+            </button>
+            <div className="act__note" role="alert" title={game.error}>
               {mode !== 'demo' && (
-                <button type="button" className="btn" onClick={onUseDemo}>
-                  Use demo mode
+                <button type="button" className="act__link" onClick={onUseDemo}>
+                  Use the demo
                 </button>
               )}
             </div>
-          </div>
+          </StageShell>
+          {chain && (
+            <div className="column">
+              <ChainBar chain={chain} />
+            </div>
+          )}
         </div>
       );
     }
-    return <Skeleton />;
+    return (
+      <div className="play">
+        <StageShell busy />
+      </div>
+    );
   }
-
-  // One face per holder: the simulated crowd in Demo mode, the claims made so far on chain.
-  const heads = demo ? (crowd?.length ?? 0) : Math.min(snap.state.claimsMade, 24);
 
   return (
     <div className="play">
-      <h1 className="pitch">
-        Somebody has to do it. <span className="pitch__hl">If nobody does, everybody pays the last person who did.</span>
-      </h1>
+      <Scene game={game} snap={snap} chain={chain} flash={flash} crowd={crowd} />
 
-      {game.error && (
-        <p className="notice notice--inline" role="status">
-          Network trouble. Showing the last known state.
-        </p>
-      )}
-
-      <div className="play__grid">
-        <HeroSlab game={game} snap={snap} chain={chain} flash={flash} heads={heads} />
-        <div className="play__side">
-          <Throne snap={snap} flash={flash} />
-          <You snap={snap} flash={flash} mode={mode} />
-        </div>
-      </div>
-
-      {demo && <DemoBar demo={demo} game={game} onRestart={onRestartDemo} />}
-      {chain && <ChainBar chain={chain} />}
-
-      <Stats snap={snap} />
-      <RoundStrip snap={snap} />
-
-      <div className="play__two">
+      <div className="column">
+        {game.error && (
+          <p className="notice notice--inline" role="status">
+            Network trouble. Showing the last known state.
+          </p>
+        )}
+        <Figures game={game} snap={snap} flash={flash} />
+        <RoundStrip snap={snap} />
         <HeroWall snap={snap} />
-        <RoundLog snap={snap} />
+        {demo && <DemoBar demo={demo} game={game} onRestart={onRestartDemo} />}
+        {chain && <ChainBar chain={chain} />}
       </div>
-
-      {crowd && <Crowd crowd={crowd} />}
-
     </div>
   );
 }

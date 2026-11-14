@@ -1,0 +1,809 @@
+/**
+ * The Play screen's one scene: holders on a ring, all looking away; a clock
+ * ring in the middle that burns down; It in the middle seat; you at six
+ * o'clock with the one button. Faces, ring and coins share one coordinate
+ * system: pixels from the stage's top-left corner (see layout.ts).
+ */
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
+import type { CrowdMember } from '../../client/types';
+import type { Game, GameSnapshot, RoundClose } from '../../hooks/useGame';
+import { prefersReducedMotion } from '../../hooks/useReducedMotion';
+import { makeRng } from '../../client/rng';
+import { useLive } from '../../hooks/useLive';
+import type { Live } from '../../hooks/useLive';
+import type { ChainUi } from '../../hooks/useSession';
+import { itCollects, maxCostFor, outcomesFor } from '../../lib/cost';
+import { formatCountdown, formatPpm, formatShare, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
+import { Digits, Who, cls, useTweened } from '../ui';
+import { TxLink } from './Chain';
+import { sceneLayout, stableOrder } from './layout';
+import type { Box, Point, SceneLayout } from './layout';
+
+function amount(v: bigint): string {
+  return formatToken(v, { maxFrac: 2, fixed: true });
+}
+
+function nameOf(id: string, me: string | null): string {
+  return me !== null && id === me ? 'you' : shortAccount(id);
+}
+
+/** True when the run of unsaved rounds has hit its limit and nothing is charged until someone volunteers. */
+export function isAsleep(snap: GameSnapshot): boolean {
+  const s = snap.state;
+  return s.it !== null && !s.saved && !s.armed && s.collapseRun >= snap.config.maxCollapseRun;
+}
+
+/* ------------------------------------------------------------------ people */
+
+export interface Person {
+  id: string;
+  /** Null for a holder we cannot name. */
+  name: string | null;
+  /** Second half of the tooltip: a balance share or a count of saves. */
+  note: string;
+}
+
+/** Everyone on the ring except you: the simulated crowd, or the accounts the chain lets us name plus the rest as plain faces. */
+export function peopleFor(snap: GameSnapshot, crowd: CrowdMember[] | null, cap = 24): Person[] {
+  const { state: s, accountId: me, itAccount } = snap;
+  if (crowd) {
+    return crowd
+      .filter((c) => c.accountId !== me)
+      .map((c) => ({ id: c.accountId, name: c.accountId, note: formatShare(c.balance, s.totalSupply, 1) }));
+  }
+  const known: Person[] = snap.heroes
+    .filter((h) => h.accountId !== me)
+    .map((h) => ({
+      id: h.accountId,
+      name: h.accountId,
+      note:
+        h.accountId === s.it && itAccount ? formatShare(itAccount.balance, s.totalSupply, 1) : `${h.saves} ${h.saves === 1 ? 'save' : 'saves'}`,
+    }));
+  if (s.it && s.it !== me && !known.some((k) => k.id === s.it)) {
+    known.unshift({ id: s.it, name: s.it, note: itAccount ? formatShare(itAccount.balance, s.totalSupply, 1) : '' });
+  }
+  const mine = snap.account?.claimed ? 1 : 0;
+  const anon = Math.max(0, Math.min(s.claimsMade, cap) - mine - known.length);
+  const out = known.slice(0, cap);
+  for (let i = 0; i < anon; i++) out.push({ id: `anon-${i}`, name: null, note: '' });
+  return out;
+}
+
+/* ------------------------------------------------------------------- faces */
+
+interface FaceProps {
+  at: Point;
+  r: number;
+  /** Unit vector the pupils are pushed along; (0, 0) looks straight out at the viewer. */
+  gaze: Point;
+  it?: boolean;
+  you?: boolean;
+  /** Unit vector pointing away from the centre: the way a face recoils. */
+  out: Point;
+  /** Place in the ring, for staggered motion. */
+  index: number;
+  label: string;
+  id: string;
+  tab: boolean;
+  onTip(id: string | null): void;
+}
+
+const Face = memo(function Face({ at, r, gaze, it, you, out, index, label, id, tab, onTip }: FaceProps) {
+  const style = {
+    '--r': `${r}px`,
+    '--gx': gaze.x.toFixed(3),
+    '--gy': gaze.y.toFixed(3),
+    '--ox': out.x.toFixed(3),
+    '--oy': out.y.toFixed(3),
+    '--i': index,
+    // Placed with `translate`, so `scale` (breathing) and `transform` (the flinch) act on the face where it stands.
+    translate: `${at.x.toFixed(1)}px ${at.y.toFixed(1)}px`,
+  } as CSSProperties;
+  return (
+    <span
+      className={cls('face', it && 'face--it', you && 'face--you')}
+      style={style}
+      role="img"
+      aria-label={label}
+      tabIndex={tab ? 0 : -1}
+      data-face={id}
+      onMouseEnter={() => onTip(id)}
+      onMouseLeave={() => onTip(null)}
+      onFocus={() => onTip(id)}
+      onBlur={() => onTip(null)}
+    >
+      <i />
+      <i />
+    </span>
+  );
+});
+
+function away(from: Point, p: Point): Point {
+  const dx = p.x - from.x;
+  const dy = p.y - from.y;
+  const d = Math.hypot(dx, dy) || 1;
+  return { x: dx / d, y: dy / d };
+}
+
+const STRAIGHT: Point = { x: 0, y: 0 };
+const AT_THE_CLOCK: Point = { x: 0, y: -1 };
+const DOWN: Point = { x: 0, y: 1 };
+
+/**
+ * Everyone looks away and hopes someone else does it. Now and then one face
+ * steals a glance at the middle, or blinks: rarely early in a round, more
+ * often and in small waves near its end. Seeded per round, driven by a few
+ * timers and class names (no rendering, no per-frame work), and off when the
+ * viewer prefers reduced motion.
+ */
+function useGlances(stage: React.RefObject<HTMLElement | null>, game: Game, round: number, active: boolean) {
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  useEffect(() => {
+    if (!active || prefersReducedMotion()) return;
+    const rng = makeRng((round * 2654435761) >>> 0);
+    const timers = new Set<number>();
+    const later = (fn: () => void, ms: number) => {
+      const t = window.setTimeout(() => {
+        timers.delete(t);
+        fn();
+      }, ms);
+      timers.add(t);
+    };
+    const play = (el: Element | undefined, name: string, ms: number) => {
+      if (!el) return;
+      el.classList.add(name);
+      later(() => el.classList.remove(name), ms);
+    };
+    const progress = () => {
+      const snap = gameRef.current.snapshot;
+      if (!snap) return 0;
+      const total = Number(snap.config.roundNs);
+      return total > 0 ? Math.min(1, Math.max(0, Number(gameRef.current.nowNs() - snap.state.roundStartNs) / total)) : 0;
+    };
+    const tick = () => {
+      const late = progress() > 0.8;
+      const el = stage.current;
+      if (el && !document.hidden) {
+        const faces = Array.from(el.querySelectorAll('.face:not(.face--it):not(.face--you)'));
+        if (faces.length > 0) {
+          const at = Math.floor(rng.next() * faces.length);
+          if (rng.chance(late ? 0.85 : 0.6)) {
+            // Near the end the glance spreads to a neighbour or two.
+            const wave = late ? 1 + Math.floor(rng.next() * 3) : 1;
+            for (let k = 0; k < wave; k++) later(() => play(faces[(at + k) % faces.length], 'face--glance', 680), k * 150);
+          } else {
+            play(faces[at], 'face--blink', 240);
+          }
+        }
+      }
+      later(tick, late ? rng.range(650, 1500) : rng.range(2600, 6200));
+    };
+    later(tick, rng.range(1200, 2800));
+    return () => {
+      for (const t of timers) window.clearTimeout(t);
+      timers.clear();
+    };
+  }, [stage, round, active]);
+}
+
+/* ------------------------------------------------------------------- clock */
+
+/** The ring that is both clock and fuse, and the time inside it. The only part of the scene that moves every frame. */
+function Clock({ game, snap, layout, box, flash, asleep }: { game: Game; snap: GameSnapshot; layout: SceneLayout; box: Box; flash: RoundClose | null; asleep: boolean }) {
+  // Fifteen steps a second: a step of the ring is a fraction of a pixel on chain and under two degrees in the fastest demo.
+  const live = useLive(game, 15);
+  const s = snap.state;
+  const { center, clockR } = layout;
+  const stroke = layout.compact ? 10 : 12;
+  const r = clockR - stroke / 2;
+  const c = 2 * Math.PI * r;
+  const idle = s.saved || asleep || s.roundSupply === 0n;
+  const p = idle ? 0 : live.progress;
+  const text = formatCountdown(live.msLeft);
+
+  // Size the numerals to the ring: digits are 0.45em wide, colons narrower.
+  const digits = [...text].filter((ch) => ch >= '0' && ch <= '9').length;
+  const em = digits * 0.45 + (text.length - digits) * 0.26;
+  const inner = clockR - stroke;
+  const size = Math.min(clockR * 0.66, (inner * 1.5) / em);
+
+  return (
+    <>
+      <svg className="ring" width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} aria-hidden="true" focusable="false">
+        <g key={flash?.kind === 'collapsed' ? flash.id : 0} className={cls(flash?.kind === 'collapsed' && 'ring--paid')}>
+          <circle className={cls('ring__hair', asleep && 'ring__hair--asleep')} cx={center.x} cy={center.y} r={r} strokeWidth={asleep ? stroke : 2} />
+          {!asleep && (
+            <circle
+              className="ring__burn"
+              cx={center.x}
+              cy={center.y}
+              r={r}
+              strokeWidth={stroke}
+              strokeDasharray={`${(c * (1 - p)).toFixed(2)} ${c.toFixed(2)}`}
+              strokeDashoffset={(-c * p).toFixed(2)}
+              transform={`rotate(-90 ${center.x} ${center.y})`}
+            />
+          )}
+          {!idle && (
+            <g className={cls('ring__tip', live.msLeft <= 10_000 && 'ring__tip--late')} style={{ transform: `rotate(${(p * 360).toFixed(2)}deg)`, transformOrigin: `${center.x}px ${center.y}px` }}>
+              <circle cx={center.x} cy={center.y - r} r={7} />
+            </g>
+          )}
+        </g>
+      </svg>
+      <div className="clock" style={{ left: center.x, top: center.y - clockR * 0.25, fontSize: `${size.toFixed(1)}px` }} aria-hidden="true">
+        <Digits text={text} />
+      </div>
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- the button */
+
+interface ActState {
+  label: string;
+  /** The cost printed on the button, when there is one to pay. */
+  cost: string | null;
+  note: string | null;
+  disabled: boolean;
+  action: 'claim' | 'volunteer' | null;
+}
+
+function actFor(snap: GameSnapshot, live: Live, pending: Game['pending']): ActState {
+  const { state: s, config, account, accountId: me } = snap;
+  const hasTokens = !!account && account.balance > 0n;
+  const none = { cost: null, note: null, disabled: true, action: null } as const;
+
+  if (!me || !account) return { ...none, label: 'Sign in' };
+  if (!hasTokens) {
+    if (!account.claimed && s.claimOpen) {
+      return {
+        label: pending === 'claim' ? 'Sending' : `Claim ${formatToken(config.claimAmount)} NOTIT`,
+        cost: null,
+        note: null,
+        disabled: pending !== null,
+        action: 'claim',
+      };
+    }
+    return { ...none, label: "I'll do it", note: 'No NOTIT left' };
+  }
+  if (s.saved) return { ...none, label: 'Saved' };
+  if (s.roundSupply === 0n) return { ...none, label: 'Nothing to save' };
+  const cost = amount(live.cost);
+  if (account.balance < live.cost) {
+    // When does the falling cost reach this balance?
+    const needPpm = Number((account.balance * 1_000_000n) / s.roundSupply);
+    let note = 'More than you hold';
+    if (needPpm >= config.minCostPpm + 1) {
+      const span = config.maxCostPpm - config.minCostPpm;
+      const at = span > 0 ? (config.maxCostPpm - needPpm) / span : 0;
+      const roundMs = Number(config.roundNs / 1_000_000n);
+      note = `Within reach at ${formatCountdown((1 - at) * roundMs)}`;
+    }
+    return { label: "I'll do it", cost, note, disabled: true, action: null };
+  }
+  return { label: pending === 'volunteer' ? 'Sending' : "I'll do it", cost, note: null, disabled: pending !== null, action: 'volunteer' };
+}
+
+/** One line for screen readers, refreshed sparingly. */
+function spokenStatus(snap: GameSnapshot, live: Live): string {
+  const s = snap.state;
+  const me = snap.accountId;
+  const left = spokenCountdown(live.msLeft);
+  const it = s.it ? `${s.it === me ? 'You are' : `${shortAccount(s.it)} is`} It.` : 'Nobody is It yet.';
+  if (s.saved && s.hero) return `Round ${s.round} is saved by ${nameOf(s.hero, me)}. ${left} until the next round. ${it}`;
+  if (s.roundSupply === 0n) return `Round ${s.round}. Nothing to save yet. ${left} left.`;
+  if (isAsleep(snap)) return `Round ${s.round}. The game is asleep: nothing is charged until someone volunteers. ${it}`;
+  return `Round ${s.round}. ${left} left. Nobody has stepped up. The cost is ${formatToken(live.cost, { maxFrac: 2 })} NOTIT. ${it}`;
+}
+
+const GUEST_STEPS = ['account', 'confirm', 'claim'] as const;
+
+/** Testnet with nobody signed in: one click to play as a guest, or a wallet. */
+function SignIn({ chain, claimAmount }: { chain: ChainUi; claimAmount: bigint }) {
+  const { session, state } = chain;
+  const { guest, wallet, restoring } = state;
+  const running = guest.status === 'running';
+  const failed = guest.status === 'error';
+  const stored = session.storedGuestId();
+  const step = guest.step ? GUEST_STEPS.indexOf(guest.step) : -1;
+  const stepText = ['Creating account', 'Waiting for the network', `Claiming ${formatToken(claimAmount)} NOTIT`][step] ?? 'Starting';
+
+  let label = 'Play as guest';
+  if (restoring) label = 'Signing in…';
+  else if (running) label = 'Setting up…';
+  else if (failed) label = 'Try again';
+  else if (stored) label = 'Continue as guest';
+
+  return (
+    <>
+      <button
+        type="button"
+        className="act"
+        disabled={running || restoring}
+        title="A throwaway testnet account. Its key stays in this browser."
+        onClick={() => void session.playAsGuest()}
+      >
+        <span className="act__label">{label}</span>
+      </button>
+      <div className="act__note" role="status" aria-live="polite">
+        {running ? (
+          <span>
+            {step + 1 > 0 ? `${step + 1}/3 ` : ''}
+            {stepText}
+          </span>
+        ) : (
+          <>
+            {failed && guest.error && (
+              <span className="act__alert" title={guest.error}>
+                <span className="act__msg">{guest.error}</span>
+              </span>
+            )}
+            {wallet.error && (
+              <span className="act__alert" title={wallet.error}>
+                <span className="act__msg">{wallet.error}</span>
+              </span>
+            )}
+            <button type="button" className="act__link" disabled={wallet.busy || restoring} onClick={() => void session.connectWallet()}>
+              {wallet.busy ? 'Opening wallets…' : 'Connect wallet'}
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** The single action, with the falling cost printed on it. */
+function Act({ game, snap, chain, flash }: { game: Game; snap: GameSnapshot; chain: ChainUi | null; flash: RoundClose | null }) {
+  const live = useLive(game, 10);
+  const { state: s, config, accountId: me } = snap;
+  const act = actFor(snap, live, game.pending);
+
+  // Screen readers: one polite sentence when the round or its state changes,
+  // and otherwise at most every ten seconds.
+  const [spoken, setSpoken] = useState('');
+  const latest = useRef({ snap, live });
+  latest.current = { snap, live };
+  useEffect(() => {
+    const say = () => setSpoken(spokenStatus(latest.current.snap, latest.current.live));
+    say();
+    const t = window.setInterval(say, 10_000);
+    return () => window.clearInterval(t);
+  }, [s.round, s.saved, s.it]);
+
+  const guestStatus = chain?.state.guest.status;
+  const signUp = chain !== null && (!me || guestStatus === 'running' || guestStatus === 'error');
+
+  // While the transaction is in flight the cost on the button stands still at what was agreed to.
+  const [sent, setSent] = useState<string | null>(null);
+  useEffect(() => {
+    if (game.pending === null) setSent(null);
+  }, [game.pending]);
+  const onAct = () => {
+    if (act.action === 'claim') void game.claim();
+    else if (act.action === 'volunteer') {
+      setSent(amount(live.cost));
+      void game.volunteer({ round: s.round, maxCost: maxCostFor(live.cost) });
+    }
+  };
+  const pending = game.pending !== null;
+  const shownCost = game.pending === 'volunteer' && sent ? sent : act.cost;
+
+  let note: ReactNode = null;
+  if (game.notice) {
+    note = (
+      <span role="alert" className="act__alert" title={game.notice.text}>
+        <button type="button" className="act__link act__ok" onClick={game.dismissNotice}>
+          OK
+        </button>
+        <span className="act__msg">{game.notice.text}</span>
+      </span>
+    );
+  } else if (flash?.kind === 'collapsed' && flash.balanceBefore !== null && flash.balanceAfter !== null && flash.balanceAfter !== flash.balanceBefore) {
+    // Nobody did it: what that just cost you, or paid you as It.
+    const up = flash.balanceAfter > flash.balanceBefore;
+    note = (
+      <span className="act__paid">
+        you {up ? 'collected' : 'paid'} {amount(up ? flash.balanceAfter - flash.balanceBefore : flash.balanceBefore - flash.balanceAfter)}
+      </span>
+    );
+  } else if (act.note) {
+    note = <span>{act.note}</span>;
+  } else if (chain && !game.pending && game.lastTx) {
+    note = <TxLink chain={chain} hash={game.lastTx.hash} label={game.lastTx.ok ? (game.lastTx.action === 'claim' ? 'Claimed' : 'Confirmed') : 'Refused'} />;
+  } else if (chain && !game.pending && chain.state.guest.claimTx) {
+    note = <TxLink chain={chain} hash={chain.state.guest.claimTx} label="Claimed" />;
+  }
+
+  return (
+    <div className="dock">
+      <p className="sr-only" role="status" aria-live="polite">
+        {spoken}
+      </p>
+      {signUp && chain ? (
+        <SignIn chain={chain} claimAmount={config.claimAmount} />
+      ) : (
+        <>
+          <button
+            type="button"
+            className={cls('act', pending && 'act--pending')}
+            disabled={act.disabled}
+            aria-busy={pending || undefined}
+            aria-label={shownCost && act.action === 'volunteer' && !pending ? `${act.label}: burn ${shownCost} NOTIT` : undefined}
+            onClick={onAct}
+          >
+            <span className="act__label">{act.label}</span>
+            {shownCost && (
+              <span className="act__cost" aria-hidden="true">
+                <Digits text={shownCost} />
+              </span>
+            )}
+          </button>
+          <div className="act__note">{note}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------- stage */
+
+function useBox(): [React.RefObject<HTMLDivElement | null>, Box] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState<Box>({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, box];
+}
+
+interface Props {
+  game: Game;
+  snap: GameSnapshot;
+  /** Set in Testnet mode. */
+  chain: ChainUi | null;
+  /** The round that just closed, for a few seconds. */
+  flash: RoundClose | null;
+  /** The simulated crowd, in Demo mode. */
+  crowd: CrowdMember[] | null;
+}
+
+export function Scene({ game, snap, chain, flash, crowd }: Props) {
+  const [ref, box] = useBox();
+  const { state: s, accountId: me } = snap;
+  const asleep = isAsleep(snap);
+  const youAreIt = me !== null && s.it === me;
+
+  const people = useMemo(() => peopleFor(snap, crowd), [snap, crowd]);
+  const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
+  const idsKey = people.map((p) => p.id).join('|');
+  const orderRef = useRef<string[]>([]);
+  const order = useMemo(() => {
+    orderRef.current = stableOrder(orderRef.current, idsKey === '' ? [] : idsKey.split('|'));
+    return orderRef.current;
+  }, [idsKey]);
+
+  // Whoever sits in the middle leaves the ring, and the rest close up around the gap.
+  const ring = useMemo(() => order.filter((id) => id !== s.it), [order, s.it]);
+  const layout = useMemo(() => (box.w > 0 && box.h > 0 ? sceneLayout(box, ring.length) : null), [box, ring.length]);
+  // Every face on the ring looks straight away from the centre.
+  const gazes = useMemo(() => (layout ? layout.slots.map((p) => away(layout.center, p)) : []), [layout]);
+
+  const [tip, setTip] = useState<string | null>(null);
+  const onTip = useCallback((id: string | null) => setTip(id), []);
+
+  // When someone steps up, every other face watches them go to the middle for half a second.
+  const [watching, setWatching] = useState(false);
+  const lastIt = useRef(s.it);
+  useEffect(() => {
+    if (lastIt.current === s.it) return;
+    lastIt.current = s.it;
+    if (s.it === null || prefersReducedMotion()) return;
+    setWatching(true);
+    const t = window.setTimeout(() => setWatching(false), 560);
+    return () => window.clearTimeout(t);
+  }, [s.it]);
+  // On first load the faces arrive one after another.
+  const [arriving, setArriving] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setArriving(false), 1100);
+    return () => window.clearTimeout(t);
+  }, []);
+  useGlances(ref, game, s.round, !s.saved && !asleep && s.roundSupply > 0n);
+
+  // Arrow keys walk around the ring; the ring is one stop in the tab order, after the button.
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (step === 0) return;
+    const all = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[data-face]'));
+    const i = all.indexOf(document.activeElement as HTMLElement);
+    if (i < 0 || all.length === 0) return;
+    all[(i + step + all.length) % all.length]!.focus();
+    e.preventDefault();
+  };
+
+  let faces: ReactNode = null;
+  let coins: ReactNode = null;
+  let tipEl: ReactNode = null;
+  if (layout) {
+    const { seat, slots } = layout;
+    const placed: Array<{ id: string; at: Point; label: string }> = [];
+    const els: ReactNode[] = [];
+    let first = true;
+    // Rendered in a fixed order, so a face that changes place glides instead of being re-inserted.
+    const ringIndex = new Map(ring.map((id, i) => [id, i]));
+    order.forEach((id) => {
+      const p = byId.get(id);
+      if (!p) return;
+      const isIt = id === s.it;
+      const idx = ringIndex.get(id) ?? -1;
+      const slot = !isIt && idx >= 0 && idx < layout.shown ? slots[idx]! : null;
+      if (!slot && !isIt) return;
+      const at = isIt ? seat : slot!;
+      const label = [p.name ? shortAccount(p.name) : 'A holder', isIt ? 'It' : p.note].filter(Boolean).join(' · ');
+      placed.push({ id, at, label });
+      els.push(
+        <Face key={id} id={id} at={at} r={isIt ? layout.seatR : layout.faceR} gaze={isIt ? STRAIGHT : gazes[idx]!} out={isIt ? STRAIGHT : gazes[idx]!} index={isIt ? 0 : idx} it={isIt} label={label} tab={first} onTip={onTip} />,
+      );
+      first = false;
+    });
+    const youAt = youAreIt ? seat : layout.you;
+    const youLabel = youAreIt ? 'You · It' : 'You';
+    placed.push({ id: 'you', at: youAt, label: youLabel });
+    els.push(
+      <Face key="you" id="you" at={youAt} r={youAreIt ? layout.seatR : layout.youR} gaze={youAreIt ? STRAIGHT : AT_THE_CLOCK} out={youAreIt ? STRAIGHT : DOWN} index={ring.length} it={youAreIt} you label={youLabel} tab={first} onTip={onTip} />,
+    );
+    faces = els;
+
+    if (flash?.kind === 'collapsed' && s.it !== null) {
+      const payers = placed.filter((f) => f.id !== s.it && !(f.id === 'you' && (youAreIt || !snap.account || flash.balanceBefore === null)));
+      coins = payers.map((f, i) => (
+        <span
+          key={`${flash.id}-${f.id}`}
+          className="coin"
+          style={
+            {
+              '--x0': `${f.at.x.toFixed(1)}px`,
+              '--y0': `${f.at.y.toFixed(1)}px`,
+              '--x1': `${seat.x.toFixed(1)}px`,
+              '--y1': `${seat.y.toFixed(1)}px`,
+              animationDelay: `${i * 30}ms`,
+            } as CSSProperties
+          }
+        />
+      ));
+    }
+
+    const tipped = tip ? placed.find((f) => f.id === tip) : null;
+    if (tipped) {
+      const rad = tipped.id === 'you' && !youAreIt ? layout.youR : layout.faceR;
+      // It sits under the numerals: its name goes below it, not over the time.
+      const below = tipped.at.y - rad < 44 || tipped.id === s.it || (tipped.id === 'you' && youAreIt);
+      tipEl = (
+        <span
+          className={cls('tip', below && 'tip--below')}
+          style={{ left: Math.min(box.w - 70, Math.max(70, tipped.at.x)), top: below ? tipped.at.y + rad + 8 : tipped.at.y - rad - 8 }}
+        >
+          {tipped.label}
+        </span>
+      );
+    }
+  }
+
+  // One short line under the clock, never wider than the space between the faces beside it:
+  // the name is cut to what fits (the whole name is in its title and in the tooltip).
+  const lineW = layout?.lineW ?? 320;
+  const fits = (words: number, perChar: number) => Math.max(5, Math.min(20, Math.floor(lineW / perChar) - words));
+  let line: ReactNode;
+  const savedByYou = s.saved && s.hero !== null && s.hero === me;
+  if (s.roundSupply === 0n) line = 'no tokens yet';
+  else if (savedByYou) line = null;
+  else if (s.saved && s.hero) {
+    line = (
+      <>
+        saved by <Who id={s.hero} me={me} max={fits(9, layout?.compact ? 9.4 : 10.8)} />
+      </>
+    );
+  } else if (asleep) line = 'asleep';
+  else if (s.it) {
+    line = (
+      <>
+        <Who id={s.it} me={me} max={fits(6, 8.8)} /> {youAreIt ? 'are' : 'is'} It
+      </>
+    );
+  } else line = 'nobody is It';
+
+  return (
+    <section
+      ref={ref}
+      className={cls(
+        'stage',
+        s.saved && 'stage--saved',
+        asleep && 'stage--asleep',
+        flash?.kind === 'collapsed' && 'stage--paid',
+        watching && 'stage--watch',
+        arriving && 'stage--arriving',
+        layout?.compact && 'stage--compact',
+      )}
+      aria-label={`Round ${s.round}`}
+    >
+      <h1 className="stage__pitch">Somebody has to do it. If nobody does, everybody pays the last person who did.</h1>
+      <Act game={game} snap={snap} chain={chain} flash={flash} />
+      {layout && (
+        <>
+          <Clock game={game} snap={snap} layout={layout} box={box} flash={flash} asleep={asleep} />
+          {s.it === null && (
+            <span className="seat" aria-hidden="true" style={{ '--r': `${layout.seatR}px`, transform: `translate(${layout.seat.x}px, ${layout.seat.y}px)` } as CSSProperties} />
+          )}
+          <div className="faces" role="group" aria-label="Holders" onKeyDown={onKey}>
+            {faces}
+          </div>
+          {layout.more && (
+            <span className="more" style={{ transform: `translate(${layout.more.x}px, ${layout.more.y}px)` }} title={`${layout.extra} more`}>
+              +{layout.extra}
+            </span>
+          )}
+          <div className="coins" aria-hidden="true">
+            {coins}
+          </div>
+          <div className="stage__under" style={{ top: layout.center.y + layout.clockR + (layout.compact ? 8 : 12), '--line-w': `${Math.round(lineW)}px` } as CSSProperties}>
+            {savedByYou ? (
+              <span className="stamp" key={s.round}>
+                You did it
+              </span>
+            ) : (
+              <span className={cls('stage__line', s.saved && 'stage__line--saved')} id="round-line">
+                {line}
+              </span>
+            )}
+          </div>
+          {tipEl}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The stage before there is a game to show: the ring as empty circles and an
+ * idle clock. Also the frame for "could not reach the network", with whatever
+ * is passed in sitting where the button goes.
+ */
+export function StageShell({ busy, line, children }: { busy?: boolean; line?: string; children?: ReactNode }) {
+  const [ref, box] = useBox();
+  const layout = useMemo(() => (box.w > 0 && box.h > 0 ? sceneLayout(box, 12) : null), [box]);
+  return (
+    <section ref={ref} className="stage stage--shell" aria-busy={busy || undefined} aria-label={busy ? 'Loading the game' : undefined}>
+      <h1 className="stage__pitch">Somebody has to do it. If nobody does, everybody pays the last person who did.</h1>
+      {children && <div className="dock">{children}</div>}
+      {layout && (
+        <>
+          <svg className="ring" width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`} aria-hidden="true" focusable="false">
+            <circle className="ring__hair" cx={layout.center.x} cy={layout.center.y} r={layout.clockR - (layout.compact ? 5 : 6)} strokeWidth={2} />
+          </svg>
+          <div aria-hidden="true">
+            {[...layout.slots, layout.you].map((p, i) => (
+              <span
+                key={i}
+                className="face face--ghost"
+                style={{ '--r': `${i === layout.slots.length ? layout.youR : layout.faceR}px`, '--i': i, translate: `${p.x.toFixed(1)}px ${p.y.toFixed(1)}px` } as CSSProperties}
+              />
+            ))}
+          </div>
+          {line && (
+            <div className="stage__under" style={{ top: layout.center.y + layout.clockR + (layout.compact ? 8 : 12) }}>
+              <span className="stage__line">{line}</span>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ----------------------------------------------------- figures (below the stage) */
+
+interface Fig {
+  key: string;
+  label: string;
+  value: ReactNode;
+  tone?: 'cut' | 'up';
+  title: string;
+}
+
+/** What each ending of this round does to one balance, and what It stands to collect. */
+export function Figures({ game, snap, flash }: { game: Game; snap: GameSnapshot; flash: RoundClose | null }) {
+  const live = useLive(game, 4);
+  const { state: s, config, account, itAccount, accountId: me } = snap;
+  const hasTokens = !!account && account.balance > 0n;
+  const balance = hasTokens ? account!.balance : config.claimAmount;
+  const isIt = hasTokens && !!account?.isIt;
+  const cutPct = formatPpm(config.cutPpm);
+  const o = outcomesFor(balance, live.cost, config.cutPpm);
+  const open = !s.saved && s.roundSupply > 0n;
+  const charged = open && s.armed;
+  const shownBalance = useTweened(balance);
+  const collected = useTweened(itAccount?.collected ?? 0n);
+  const paid = flash?.kind === 'collapsed';
+  const of = hasTokens ? 'your balance' : `${formatToken(balance)} NOTIT`;
+
+  // What the round that just closed did to this balance: a cut, or a payment to It.
+  const delta = paid && flash.balanceBefore !== null && flash.balanceAfter !== null ? flash.balanceAfter - flash.balanceBefore : 0n;
+
+  const figs: Fig[] = [
+    {
+      key: 'keep',
+      label: 'keep',
+      value: (
+        <>
+          <Digits text={amount(shownBalance)} />
+          {delta !== 0n && (
+            <span className={cls('figs__delta', delta > 0n && 'figs__delta--up')} key={flash!.id}>
+              {delta > 0n ? '+' : '−'}
+              {amount(delta > 0n ? delta : -delta)}
+            </span>
+          )}
+        </>
+      ),
+      title: `Someone else does it: ${of} stays as it is`,
+    },
+    isIt
+      ? {
+          key: 'none',
+          label: 'collect',
+          value: charged ? <Digits text={amount(balance + itCollects(s.totalSupply, balance, config.cutPpm))} /> : '—',
+          tone: 'up',
+          title: 'Nobody does it: everyone pays you',
+        }
+      : {
+          key: 'none',
+          label: `pay ${cutPct}`,
+          value: charged ? <Digits text={amount(o.ifCollapsed)} /> : '—',
+          tone: 'cut',
+          title: `Nobody does it: ${of} after the ${cutPct} cut`,
+        },
+    {
+      key: 'do',
+      label: 'burn now',
+      value: open && o.ifYouDoIt !== null ? <Digits text={amount(o.ifYouDoIt)} /> : '—',
+      title: `You do it now: ${of} after burning the cost`,
+    },
+  ];
+  if (s.it && s.it !== me) {
+    const gain = itAccount ? itCollects(s.totalSupply, itAccount.balance, config.cutPpm) : 0n;
+    figs.push(
+      paid
+        ? { key: 'it', label: 'It collected', value: <Digits text={amount(collected)} />, tone: 'up', title: `${shortAccount(s.it)} has collected this much as It` }
+        : {
+            key: 'it',
+            label: 'It collects',
+            value: charged ? <Digits text={`+${amount(gain)}`} /> : '—',
+            title: `What ${shortAccount(s.it)} collects if nobody does it`,
+          },
+    );
+  }
+
+  return (
+    <dl className="figs" aria-label={`What each ending of this round does to ${of}`}>
+      {figs.map((f) => (
+        <div key={f.key} className={cls('figs__item', f.tone && `figs__item--${f.tone}`)} title={f.title}>
+          <dt>{f.label}</dt>
+          <dd>{f.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}

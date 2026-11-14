@@ -1,0 +1,608 @@
+/* ==========================================================================
+   The ring: one flat yellow stage, the same in both themes. Yellow, ink and
+   white only; red appears on the fuse tip and when a round is not saved.
+   ========================================================================== */
+
+.main--bleed {
+  max-width: none;
+  padding: 0;
+}
+
+.stage {
+  --s-ink: #16130c;
+  --s-white: #fffdf5;
+  --s-red: #c81e2f;
+  --s-stroke: var(--border);
+  position: relative;
+  z-index: 1;
+  height: clamp(480px, calc(100svh - var(--chrome-h, 97px) - 85px), 760px);
+  background: var(--accent);
+  color: var(--s-ink);
+}
+.stage--loading {
+  opacity: 0.6;
+}
+
+.stage__pitch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  margin: 0;
+  padding: 0 var(--space-4);
+  font-size: var(--text-l);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ---- faces: a white disc, one ink stroke, two pupils ---- */
+.face,
+.seat,
+.more,
+.coin {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.face {
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+  background: var(--s-white);
+  border: var(--s-stroke) solid var(--s-ink);
+  border-radius: 50%;
+  transition:
+    translate 0.6s cubic-bezier(0.45, 0, 0.2, 1),
+    width 0.6s cubic-bezier(0.45, 0, 0.2, 1),
+    height 0.6s cubic-bezier(0.45, 0, 0.2, 1),
+    margin 0.6s cubic-bezier(0.45, 0, 0.2, 1),
+    background-color 0.3s linear;
+}
+.face:focus-visible {
+  outline: var(--border) solid var(--s-ink);
+  outline-offset: 3px;
+}
+.face i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--r) * 0.3);
+  height: calc(var(--r) * 0.3);
+  margin: calc(var(--r) * -0.15) 0 0 calc(var(--r) * -0.15);
+  background: var(--s-ink);
+  border-radius: 50%;
+  /* Pushed 28% of the radius along the gaze. */
+  transform: translate(calc(var(--r) * (var(--gx) * 0.3 + var(--eye))), calc(var(--r) * (var(--gy) * 0.3 - 0.04)));
+  transition:
+    transform 0.5s cubic-bezier(0.45, 0, 0.2, 1),
+    background-color 0.3s linear,
+    height 0.3s linear;
+}
+.face i:first-child {
+  --eye: -0.25;
+}
+.face i:last-child {
+  --eye: 0.25;
+}
+/* It: ink, with yellow eyes on you */
+.face--it {
+  z-index: 2;
+  background: var(--s-ink);
+}
+.face--it i {
+  background: var(--accent);
+}
+/* asleep: eyes closed */
+.stage--asleep .face i {
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 0;
+}
+.seat {
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+  border: 2px solid var(--s-ink);
+  border-radius: 50%;
+}
+.more {
+  width: 60px;
+  margin: -0.7em 0 0 -30px;
+  font-weight: 800;
+  font-stretch: var(--num-stretch);
+  font-size: var(--text-xl);
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ---- the clock: an ink ring that burns away to a hairline ---- */
+.ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ring circle {
+  fill: none;
+  stroke: var(--s-ink);
+  stroke-linecap: butt;
+}
+.ring__hair--asleep {
+  stroke-dasharray: 3 11;
+}
+.ring__tip circle {
+  fill: var(--s-red);
+  stroke: none;
+}
+.ring--paid circle:not(.ring__tip circle) {
+  animation: ring-red 1s ease-out both;
+}
+@keyframes ring-red {
+  0%,
+  55% {
+    stroke: var(--s-red);
+  }
+}
+.clock {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.clock .digits__d {
+  width: 0.45em;
+}
+.stage__under {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.stage__line {
+  max-width: var(--line-w, 100%);
+  overflow: hidden;
+  font-size: var(--text-m);
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage__line--saved {
+  font-size: var(--text-l);
+  font-weight: 800;
+}
+/* saved: the ring closes and, for a moment, thickens */
+.stage--saved .ring__burn {
+  animation: ring-saved 0.3s ease-out both;
+}
+@keyframes ring-saved {
+  40% {
+    stroke-width: 20px;
+  }
+}
+.stage__line .who {
+  padding: 0;
+  background: none;
+  font-weight: 800;
+  pointer-events: auto;
+}
+.stamp {
+  padding: 2px var(--space-3);
+  background: var(--s-white);
+  border: var(--s-stroke) solid var(--s-ink);
+  border-radius: 0;
+  font-weight: 800;
+  font-size: var(--text-l);
+  transform: rotate(-5deg);
+  animation: stamp-in 0.32s ease-out both;
+}
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-5deg) scale(1.7);
+  }
+}
+
+/* ---- coins: every face pays It, straight down the radius ---- */
+.coin {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: var(--s-white);
+  border: 2px solid var(--s-ink);
+  border-radius: 50%;
+  opacity: 0;
+  z-index: 3;
+  animation: coin 0.6s ease-in both;
+}
+@keyframes coin {
+  0% {
+    opacity: 1;
+    transform: translate(var(--x0), var(--y0));
+  }
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x1), var(--y1));
+  }
+}
+
+/* ---- motion that says "everyone looks away and hopes someone else does it" ----
+   Transform, opacity, translate and scale only; nothing here costs layout. */
+
+/* first load: the faces arrive one after another */
+.stage--arriving .face,
+.stage--shell .face {
+  animation: arrive 0.22s linear both;
+  animation-delay: calc(var(--i) * 20ms);
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+  }
+}
+/* a glance at the middle (about 250 ms) and away again (about 400 ms) */
+.face--glance i {
+  animation: glance 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes glance {
+  36%,
+  44% {
+    transform: translate(calc(var(--r) * (var(--gx) * -0.24 + var(--eye))), calc(var(--r) * (var(--gy) * -0.24 - 0.04)));
+  }
+}
+.face--blink i {
+  animation: blink 0.22s linear;
+}
+@keyframes blink {
+  50% {
+    transform: translate(calc(var(--r) * (var(--gx) * 0.3 + var(--eye))), calc(var(--r) * (var(--gy) * 0.3 - 0.04))) scaleY(0.12);
+  }
+}
+/* someone steps up: for half a second everyone watches them go to the middle */
+.stage--watch .face:not(.face--it):not(.face--you) i {
+  transform: translate(calc(var(--r) * (var(--gx) * -0.26 + var(--eye))), calc(var(--r) * (var(--gy) * -0.26 - 0.04)));
+  transition-duration: 0.16s;
+}
+/* the last ten seconds: the tip beats once a second */
+.ring__tip--late circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tip 1s ease-out infinite;
+}
+@keyframes tip {
+  0% {
+    transform: scale(1.55);
+  }
+  55%,
+  100% {
+    transform: scale(1);
+  }
+}
+/* asleep: slow breathing, each face in its own time */
+.stage--asleep .face {
+  animation: breathe 4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -310ms);
+}
+@keyframes breathe {
+  0%,
+  100% {
+    scale: 0.985;
+  }
+  50% {
+    scale: 1.015;
+  }
+}
+/* nobody did it: each face flinches as its coin leaves, and It's eyes widen */
+.stage--paid .face:not(.face--it) {
+  animation: flinch 0.15s ease-out both;
+  animation-delay: calc(var(--i) * 30ms);
+}
+@keyframes flinch {
+  50% {
+    transform: translate(calc(var(--ox) * 4px), calc(var(--oy) * 4px));
+  }
+}
+.face--it i {
+  transition:
+    transform 0.5s cubic-bezier(0.45, 0, 0.2, 1),
+    background-color 0.3s linear,
+    scale 0.2s ease-out;
+}
+.stage--paid .face--it i {
+  scale: 1.3;
+}
+/* the stage before the game is known: the ring as empty circles */
+.face--ghost {
+  background: transparent;
+  border-color: rgba(22, 19, 12, 0.3);
+}
+.stage--shell .ring__hair {
+  stroke: rgba(22, 19, 12, 0.3);
+}
+/* what sits under the stage fades in when a tab opens */
+.column,
+#panel-lab > *,
+#panel-rules > * {
+  animation: fade 0.12s linear both;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- names only on hover or focus ---- */
+.tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, -100%);
+  padding: var(--space-1) var(--space-2);
+  background: var(--s-ink);
+  color: var(--s-white);
+  border-radius: 0;
+  font-size: var(--text-s);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tip--below {
+  transform: translate(-50%, 0);
+}
+
+/* ---- the one button, under your face ---- */
+.dock {
+  position: absolute;
+  left: 50%;
+  /* Anchored from the top so a long message grows downwards, not over your face. */
+  top: calc(100% - 96px);
+  z-index: 4;
+  width: min(340px, calc(100% - 28px));
+  transform: translateX(-50%);
+}
+.act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 58px;
+  padding: var(--space-2) var(--space-5);
+  background: var(--s-ink);
+  color: var(--s-white);
+  border: var(--s-stroke) solid var(--s-ink);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: var(--text-l);
+  font-weight: 800;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: translate 0.08s linear;
+}
+.act:has(.act__cost) {
+  justify-content: space-between;
+}
+.act__cost {
+  color: var(--accent);
+  font-size: var(--text-xl);
+  font-stretch: 75%;
+}
+.act:hover:not(:disabled) {
+  background: #2c2617;
+}
+.act:active:not(:disabled) {
+  translate: 0 2px;
+}
+/* in flight: the button stays ink, the cost stands still, the word breathes */
+.act.act--pending:disabled {
+  background: var(--s-ink);
+  color: var(--s-white);
+  cursor: progress;
+}
+.act.act--pending:disabled .act__cost {
+  color: var(--accent);
+}
+.act--pending .act__label {
+  animation: sending 1s ease-in-out infinite;
+}
+@keyframes sending {
+  50% {
+    opacity: 0.45;
+  }
+}
+.act:focus-visible,
+.act__link:focus-visible {
+  outline: var(--border) solid var(--s-ink);
+  outline-offset: 3px;
+}
+.act:disabled {
+  background: transparent;
+  color: var(--s-ink);
+  cursor: default;
+}
+.act:disabled .act__cost {
+  color: var(--s-ink);
+}
+.act__note {
+  min-height: 1.35rem;
+  margin-top: var(--space-1);
+  font-size: var(--text-s);
+  font-weight: 600;
+  line-height: 1.35rem;
+  text-align: center;
+}
+.act__note a {
+  color: inherit;
+}
+.act__paid {
+  font-weight: 800;
+}
+.act__alert {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--s-ink);
+  color: var(--s-white);
+  border-radius: 0;
+  font-size: var(--text-xs);
+  line-height: 1.15;
+  text-align: left;
+}
+/* Two lines at most, so the button never moves; the whole message is in the title. */
+.act__msg {
+  flex: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.act__ok {
+  flex: none;
+}
+.act__link {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ---- below the stage: one quiet column ---- */
+.column {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-4) var(--space-7);
+  display: grid;
+  gap: var(--space-5);
+}
+.figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+.figs__item {
+  min-width: 0;
+}
+.figs dt {
+  color: var(--muted);
+  font-size: var(--text-s);
+}
+.figs dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-stretch: var(--num-stretch);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.figs__item--cut dd {
+  color: var(--cut);
+}
+.figs__delta {
+  margin-left: var(--space-2);
+  color: var(--cut);
+  font-size: var(--text-s);
+  animation: delta-in 3.4s linear both;
+}
+.figs__delta--up {
+  color: inherit;
+}
+@keyframes delta-in {
+  0% {
+    opacity: 0;
+  }
+  6%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.column .card__head {
+  margin-bottom: var(--space-2);
+}
+@media (max-width: 799px) {
+  .stage__pitch {
+    padding: 0 12%;
+  }
+}
+
+/* ---- phone: a tall oval, the button pinned to the bottom of the viewport ---- */
+@media (max-width: 619px) {
+  .stage {
+    --s-stroke: 2.5px;
+    height: clamp(440px, calc(100svh - var(--chrome-h, 159px)), 720px);
+  }
+  .dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    padding: var(--space-2) var(--space-4) calc(6px + env(safe-area-inset-bottom));
+    background: var(--accent);
+    color: var(--s-ink);
+    transform: none;
+  }
+  .act {
+    min-height: 54px;
+  }
+  /* Room for a two-line message is always there, so the button stays where it is. */
+  .act__note {
+    min-height: 38px;
+    display: grid;
+    align-content: center;
+  }
+  .stage__line--saved {
+    font-size: var(--text-m);
+  }
+  .stage__pitch {
+    top: 12px;
+    padding: 0 14px;
+    font-size: clamp(0.9rem, 4vw, 1rem);
+  }
+  .figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app:has(.dock) .foot {
+    padding-bottom: calc(110px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .face,
+  .face i,
+  .act {
+    transition: none;
+  }
+  .coin,
+  .stamp,
+  .ring--paid circle,
+  .stage--saved .ring__burn,
+  .figs__delta {
+    animation: none;
+  }
+  .coin {
+    display: none;
+  }
+}

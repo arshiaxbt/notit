@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { prefersReducedMotion } from '../hooks/useReducedMotion';
-import { formatToken, shortAccount } from '../lib/format';
-import type { TokenFormat } from '../lib/format';
+import { shortAccount } from '../lib/format';
 
 export function cls(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
@@ -60,18 +59,19 @@ export function useTweened(value: bigint, ms = 900): bigint {
   return shown;
 }
 
-/** A token amount that counts up or down when it changes. */
-export function Amount({ value, format, className }: { value: bigint; format?: TokenFormat; className?: string }) {
-  const shown = useTweened(value);
-  return <Digits className={className} text={formatToken(shown, { maxFrac: 2, fixed: true, ...format })} />;
+/** A name for a very narrow place: the part before the dot, cut. */
+function tightName(id: string, max: number): string {
+  const dot = id.indexOf('.');
+  const stem = dot > 0 ? id.slice(0, dot) : id;
+  return stem.length <= max ? stem : `${stem.slice(0, Math.max(3, max - 1))}…`;
 }
 
 /** An account name: "you" for the viewer, shortened otherwise. */
-export function Who({ id, me }: { id: string; me: string | null }) {
+export function Who({ id, me, max }: { id: string; me: string | null; max?: number }) {
   if (me !== null && id === me) return <span className="who who--me">you</span>;
   return (
     <span className="who" title={id}>
-      {shortAccount(id)}
+      {max !== undefined && max < 14 ? tightName(id, max) : shortAccount(id, max)}
     </span>
   );
 }

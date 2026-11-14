@@ -5,6 +5,7 @@ import '@fontsource-variable/bricolage-grotesque/wdth.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/app.css';
+import './styles/scene.css';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(

@@ -1,8 +1,6 @@
 /** Testnet-mode pieces of the Play screen: the contract bar and the guest sign-up. */
 import { accountUrl, txUrl } from '../../client/config';
-import type { GuestStep } from '../../client/session';
 import type { ChainUi } from '../../hooks/useSession';
-import { formatToken, shortAccount } from '../../lib/format';
 import { cls } from '../ui';
 
 function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -79,7 +77,7 @@ export function ChainBar({ chain }: { chain: ChainUi }) {
               }
             }}
           >
-            Forget guest
+            Forget
           </button>
         )}
       </p>
@@ -87,86 +85,11 @@ export function ChainBar({ chain }: { chain: ChainUi }) {
   );
 }
 
-const STEPS: Array<{ id: GuestStep; label: (claim: string) => string }> = [
-  { id: 'account', label: () => 'Create account' },
-  { id: 'confirm', label: () => 'Wait for the network' },
-  { id: 'claim', label: (claim) => `Claim ${claim} NOTIT` },
-];
-
-/**
- * The sign-in block shown in place of the main button while nobody is signed
- * in: one click to play as a guest, with its progress, or a wallet.
- */
-export function GuestStart({ chain, claimAmount }: { chain: ChainUi; claimAmount: bigint }) {
-  const { session, state } = chain;
-  const { guest, wallet, restoring } = state;
-  const running = guest.status === 'running';
-  const failed = guest.status === 'error';
-  const stored = session.storedGuestId();
-  const activeIdx = guest.step ? STEPS.findIndex((s) => s.id === guest.step) : -1;
-  const claim = formatToken(claimAmount);
-
-  let label = 'Play as guest';
-  if (restoring) label = 'Signing in…';
-  else if (running) label = 'Setting up…';
-  else if (failed) label = 'Try again';
-  else if (stored) label = 'Continue as guest';
-
-  return (
-    <div className="guest">
-      <button type="button" className="cta" disabled={running || restoring} onClick={() => void session.playAsGuest()}>
-        <span className="cta__label">{label}</span>
-        {!running && !restoring && (
-          <span className="cta__sub">{stored && !failed ? shortAccount(stored) : `testnet account + ${claim} NOTIT`}</span>
-        )}
-      </button>
-
-      {(running || failed) && (
-        <ol className="steps" aria-label="Guest sign-up progress">
-          {STEPS.map((s, i) => {
-            const status = i < activeIdx ? 'done' : i === activeIdx ? (failed ? 'failed' : 'active') : 'todo';
-            return (
-              <li key={s.id} className={cls('steps__item', `steps__item--${status}`)}>
-                <span className="steps__mark" aria-hidden="true">
-                  {status === 'done' ? '✓' : status === 'failed' ? '!' : i + 1}
-                </span>
-                <span>
-                  {s.label(claim)}
-                  <span className="sr-only">
-                    {status === 'done' ? ': done' : status === 'active' ? ': in progress' : status === 'failed' ? ': failed' : ''}
-                  </span>
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      <div role="status" aria-live="polite">
-        {failed && guest.error && <p className="cta__hint cta__hint--warn">{guest.error}</p>}
-      </div>
-
-      {!running && (
-        <>
-          <button type="button" className="btn guest__wallet" disabled={wallet.busy || restoring} onClick={() => void session.connectWallet()}>
-            {wallet.busy ? 'Opening wallets…' : 'Connect a wallet'}
-          </button>
-          {wallet.error && (
-            <p className="cta__hint cta__hint--warn" role="alert">
-              {wallet.error}
-            </p>
-          )}
-          <p className="cta__hint">Throwaway testnet account. Key stays in this browser.</p>
-        </>
-      )}
-    </div>
-  );
-}
-
 /** A link to the last transaction on the explorer. */
 export function TxLink({ chain, hash, label }: { chain: ChainUi; hash: string; label: string }) {
   return (
-    <p className="cta__hint txlink">
-      {label} · <ExternalLink href={txUrl(chain.session.config, hash)}>transaction</ExternalLink>
-    </p>
+    <span className="txlink">
+      <ExternalLink href={txUrl(chain.session.config, hash)}>{label}</ExternalLink>
+    </span>
   );
 }

@@ -1,12 +1,19 @@
-/* Design tokens. Neutral paper, ink, one accent (playground yellow) that is
-   kept for the slab and a few marks, and a red used only for "everyone pays". */
+/* Design tokens: the whole scale, and nothing outside it.
+   Colour  — paper, ink, one accent (the stage yellow), white, and a red that
+             means "nobody did it" and nothing else.
+   Space   — 4 8 12 16 24 32 48.
+   Radius  — one, for controls. Bands, tables and the stage are square.
+   Line    — one weight, plus a hairline between table rows.
+   Type    — five sizes and a headline; words at normal width, every number condensed. */
 :root {
   --font: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', ui-rounded, system-ui, -apple-system, 'Segoe UI',
     Roboto, 'Helvetica Neue', Arial, sans-serif;
 
+  /* colour */
   --accent: #ffd60a;
-  --accent-ink: #16130c;
+  --accent-ink: #16130c; /* ink on the accent, the same in both themes */
   --accent-ink-2: #4a4334;
+  --white: #fffdf5;
 
   --paper: #f4f2ec;
   --surface: #ffffff;
@@ -18,18 +25,9 @@
   --hair: rgba(22, 19, 12, 0.16);
   --cut: #c81e2f;
   --cut-soft: #ffe1dd;
-  --shadow-color: #16130c;
   --focus: #16130c;
 
-  /* Words are set at normal width; every live number is set condensed. */
-  --num-stretch: 75%;
-
-  --radius: 14px;
-  --radius-sm: 9px;
-  --border: 2.5px;
-  --shadow: 5px 5px 0 var(--shadow-color);
-  --shadow-sm: 3px 3px 0 var(--shadow-color);
-
+  /* space */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -38,9 +36,24 @@
   --space-6: 32px;
   --space-7: 48px;
 
+  /* radius and line */
+  --radius: 12px;
+  --border: 3px;
+  --hairline: 1px;
+
+  /* type */
+  --text-xs: 0.8rem;
+  --text-s: 0.9rem;
+  --text-m: 1rem;
+  --text-l: 1.2rem;
+  --text-xl: 1.6rem;
+  --text-2xl: clamp(2rem, 5vw, 2.75rem);
+  --num-stretch: 75%;
+
   color-scheme: light;
 }
 
+/* Dark: the page goes near-black and the words cream; the stage stays the same yellow. */
 :root[data-theme='dark'] {
   --paper: #14120d;
   --surface: #1f1c14;
@@ -48,11 +61,10 @@
   --ink: #fff4d6;
   --ink-2: #d9cfb3;
   --muted: #a69c82;
-  --line: #6f664c;
-  --hair: rgba(255, 244, 214, 0.16);
+  --line: #fff4d6;
+  --hair: rgba(255, 244, 214, 0.18);
   --cut: #ff6b6b;
   --cut-soft: #3b1614;
-  --shadow-color: #000000;
   --focus: #fff4d6;
   color-scheme: dark;
 }

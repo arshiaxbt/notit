@@ -59,8 +59,6 @@ export function Header({ tab, onTab, mode, onMode, testnetAvailable, network, ch
       <p className="ribbon">
         <span>{mode === 'demo' ? 'Demo' : network}</span>
         <span aria-hidden="true">·</span>
-        <span>{mode === 'demo' ? 'simulated crowd' : 'test tokens'}</span>
-        <span aria-hidden="true">·</span>
         <span>no value</span>
       </p>
       <div className="top__bar">

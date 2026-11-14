@@ -229,3 +229,5 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Made by [0xarshia](https://x.com/0xarshia).

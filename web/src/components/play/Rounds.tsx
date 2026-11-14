@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { CrowdMember, HistoryEntry } from '../../client/types';
+import type { HistoryEntry } from '../../client/types';
 import type { GameSnapshot } from '../../hooks/useGame';
 import { formatCountdown, formatInt, formatToken, shortAccount } from '../../lib/format';
 import { Card, Who, cls } from '../ui';
@@ -63,7 +63,7 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
     <Card
       labelId="strip-title"
       className="strip"
-      title={`Last ${cells.length || STRIP} rounds`}
+      title={`Round ${formatInt(s.round)}`}
       aside={
         <ul className="legend" aria-label="Legend">
           <li>
@@ -104,7 +104,7 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
 
 /** Everyone who has ever volunteered: what they burned and what they collected as It. */
 export function HeroWall({ snap }: { snap: GameSnapshot }) {
-  const { heroes, accountId: me, state: s } = snap;
+  const { heroes, accountId: me } = snap;
   const rows = useMemo(
     () =>
       [...heroes]
@@ -114,7 +114,7 @@ export function HeroWall({ snap }: { snap: GameSnapshot }) {
   );
 
   return (
-    <Card labelId="wall-title" className="wall" title="Hero wall">
+    <Card labelId="wall-title" className="wall" title={<span className="sr-only">Volunteers</span>}>
       {rows.length === 0 ? (
         <p className="empty">Nobody yet.</p>
       ) : (
@@ -141,7 +141,6 @@ export function HeroWall({ snap }: { snap: GameSnapshot }) {
                 <tr key={h.accountId} className={cls(h.accountId === me && 'is-me')}>
                   <th scope="row">
                     <Who id={h.accountId} me={me} />
-                    {s.it === h.accountId && <span className="tag tag--it">It</span>}
                   </th>
                   <td className="num">{formatInt(h.saves)}</td>
                   <td className="num">{amount(h.burned)}</td>
@@ -153,79 +152,5 @@ export function HeroWall({ snap }: { snap: GameSnapshot }) {
         </div>
       )}
     </Card>
-  );
-}
-
-/** The most recent history entries, newest first: fragments, not sentences. */
-export function RoundLog({ snap }: { snap: GameSnapshot }) {
-  const { accountId: me } = snap;
-  const recent = useMemo(() => snap.history.slice(-7).reverse(), [snap.history]);
-  return (
-    <Card labelId="log-title" className="log" title="Log">
-      {recent.length === 0 ? (
-        <p className="empty">Nothing yet.</p>
-      ) : (
-        <ol className="log__list">
-          {recent.map((e) =>
-            e.kind === 'saved' ? (
-              <li key={`s${e.round}`} className="log__item log__item--saved">
-                <span className="log__round">#{formatInt(e.round)}</span>
-                <span className="log__text">
-                  <b>
-                    <Who id={e.hero} me={me} />
-                  </b>{' '}
-                  did it · {formatCountdown(e.msLeft)} left · burned {amount(e.cost)}
-                </span>
-              </li>
-            ) : (
-              <li key={`c${e.firstRound}`} className="log__item log__item--collapsed">
-                <span className="log__round">
-                  #{formatInt(e.firstRound)}
-                  {e.count > 1 ? `–${formatInt(e.lastRound)}` : ''}
-                </span>
-                <span className="log__text">
-                  nobody{e.count > 1 ? ` ×${e.count}` : ''} ·{' '}
-                  <b>
-                    <Who id={e.it} me={me} />
-                  </b>{' '}
-                  collected {amount(e.paid)}
-                </span>
-              </li>
-            ),
-          )}
-        </ol>
-      )}
-    </Card>
-  );
-}
-
-/** Demo mode only: the simulated holders, folded away until asked for. */
-export function Crowd({ crowd }: { crowd: CrowdMember[] }) {
-  const sorted = useMemo(() => [...crowd].sort((a, b) => (a.balance > b.balance ? -1 : a.balance < b.balance ? 1 : 0)), [crowd]);
-  const top = sorted[0]?.balance ?? 0n;
-
-  return (
-    <details className="card crowd">
-      <summary className="crowd__summary">Crowd · {crowd.length} bots</summary>
-      <ul className="crowd__list">
-        {sorted.map((c) => (
-          <li key={c.accountId} className={cls('bot', c.isIt && 'bot--it')}>
-            <span className="bot__name">
-              {c.accountId}
-              {c.isIt && <span className="tag tag--it">It</span>}
-            </span>
-            <span className="bot__strategy" title={c.blurb}>
-              {c.strategy}
-            </span>
-            <span className="bot__bar" aria-hidden="true">
-              <span style={{ width: `${top > 0n ? Math.max(2, Number((c.balance * 100n) / top)) : 0}%` }} />
-            </span>
-            <span className="bot__nums">
-              {formatToken(c.balance, { maxFrac: 0 })} · {c.saves} {c.saves === 1 ? 'save' : 'saves'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </details>
   );
 }

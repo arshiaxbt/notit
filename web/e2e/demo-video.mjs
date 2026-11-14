@@ -71,8 +71,10 @@ const H = 720;
 const FPS = 30;
 const FAST = 16;
 const DISSOLVE = 0.4;
-/** The page is drawn at 90% so the round, "Who is It" and "You" fit above the caption. */
-const ZOOM = 0.9;
+/** The page is filmed at its real size: the stage fills the frame under the caption band. */
+const ZOOM = 1;
+/** The caption band sits over the header, at the very top of the frame, and is exactly as tall. */
+const BAND = 97;
 
 const t0 = Date.now();
 const log = (...args) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1).padStart(6)}s]`, ...args);
@@ -82,20 +84,19 @@ const now = () => Date.now() / 1000;
 /* ------------------------------------------------------------------ record */
 
 /** Runs in the page: caption bar, fast-forward marker and end card, in the app's own style. */
-export function installOverlay({ zoom, speed, url = '' }) {
+export function installOverlay({ zoom, speed, url = '', band = 97 }) {
   document.body.style.zoom = String(zoom);
   const style = document.createElement('style');
   style.textContent = `
     .vid { font-family: 'Bricolage Grotesque Variable', system-ui, sans-serif; position: fixed; z-index: 9999; pointer-events: none; }
     .vid-off .vid { visibility: hidden; }
-    .vid-caption { left: 50%; bottom: 20px; transform: translateX(-50%); width: max-content; max-width: 1160px;
-      padding: 13px 28px 15px; background: #16130c; color: #fff4d6; border: 3px solid #ffd60a; border-radius: 18px;
-      font-weight: 800; font-size: 31px; line-height: 1.18; letter-spacing: -0.01em; text-align: center; text-wrap: balance;
-      box-shadow: 0 7px 0 rgba(22,19,12,.35); opacity: 0; transition: opacity .18s ease; }
+    .vid-caption { left: 0; right: 0; top: 0; height: ${band}px; display: grid; place-content: center; padding: 0 60px;
+      background: #16130c; color: #fff4d6; font-weight: 800; font-size: 28px; line-height: 1.16; letter-spacing: -0.01em;
+      text-align: center; text-wrap: balance; opacity: 0; transition: opacity .18s ease; }
     .vid-caption.on { opacity: 1; }
     .vid-caption b { color: #ffd60a; }
-    .vid-fast { right: 84px; bottom: 114px; padding: 5px 14px 6px; background: #16130c; color: #ffd60a; border: 3px solid #ffd60a;
-      border-radius: 12px; font-weight: 800; font-size: 26px; letter-spacing: .02em; display: none; }
+    .vid-fast { right: 28px; top: ${band + 16}px; padding: 4px 13px 5px; background: #16130c; color: #ffd60a;
+      border-radius: 10px; font-weight: 800; font-size: 24px; letter-spacing: .02em; display: none; }
     .vid-fast.on { display: block; }
     .vid-end { inset: 0; display: grid; place-content: center; justify-items: center; gap: 22px; background: #16130c; color: #fff4d6;
       opacity: 0; transition: opacity .35s ease; text-align: center; }
@@ -126,14 +127,14 @@ export function installOverlay({ zoom, speed, url = '' }) {
     <div class="vid-end__name">Not It <b>($NOTIT)</b></div>
     <div class="vid-end__by">built at NEAR HACKATHON</div>
     <div class="vid-end__url">${url}</div>
-    <div class="vid-end__small">testnet · test tokens · no value</div>`;
+    <div class="vid-end__small">testnet · no value</div>`;
   window.__vid = {
     caption(html) {
       if (!html) {
         caption.classList.remove('on');
         return;
       }
-      caption.innerHTML = html;
+      caption.innerHTML = `<span>${html}</span>`; // one flow of text, centred in the band
       caption.classList.add('on');
     },
     fast(on) {
@@ -181,14 +182,20 @@ async function record() {
   // ---- helpers over the page ----
   // Reads text straight from the DOM: an element that is not there is an empty string, at once.
   const text = async (sel) => (await page.evaluate((s) => document.querySelector(s)?.textContent ?? '', sel)).replace(/\s+/g, ' ').trim();
-  const round = async () => Number((await text('#round-heading span')).replace(/\D/g, ''));
+  const round = async () => Number((await text('#strip-title')).replace(/\D/g, ''));
   const secondsLeft = async () => {
-    const parts = (await text('.countdown .sr-only')).split(':').map(Number);
+    const parts = (await text('.clock .sr-only')).split(':').map(Number);
     return parts.reduce((acc, v) => acc * 60 + v, 0);
   };
-  const saved = async () => (await page.locator('.slab--saved').count()) > 0;
+  const saved = async () => (await page.locator('.stage--saved').count()) > 0;
   const caption = (html) => page.evaluate((h) => window.__vid.caption(h), html);
   const marker = (on) => page.evaluate((v) => window.__vid.fast(v), on);
+  /** The balance the figures under the stage show ("keep"). */
+  const balance = () => text('.figs__item dd .sr-only');
+  /** A row of the volunteer table for the signed-in account: 2 = burned, 3 = collected. */
+  const mine = (col) => text(`.wall tr.is-me td:nth-of-type(${col})`);
+  const num = (v) => Number(v.replace(/[^0-9.]/g, ''));
+  const fmt = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const scrollTo = async (sel, offset = 12, smooth = false) => {
     await page.evaluate(
       ({ sel, offset, smooth }) => {
@@ -299,16 +306,16 @@ async function record() {
   const facts = { account: guest.accountId, base: BASE_URL, txs: [] };
   try {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('#round-heading', { timeout: 45_000 });
+    await page.waitForSelector('.stage .face', { timeout: 45_000 });
     await page.waitForSelector('.acct__id', { timeout: 45_000 });
     await page.waitForFunction(() => !/Checking/.test(document.querySelector('.lock')?.textContent ?? ''), null, { timeout: 30_000 });
     await page.evaluate(() => document.fonts.ready);
-    await page.evaluate(installOverlay, { zoom: ZOOM, speed: FAST, url: SITE });
+    await page.evaluate(installOverlay, { zoom: ZOOM, speed: FAST, url: SITE, band: BAND });
     facts.contract = await text('.chainbar code');
     facts.locked = (await page.locator('.lock--locked').count()) > 0;
     log(`signed in as ${await text('.acct__id')} on ${facts.contract}; locked: ${facts.locked}`);
-    const canClaim = /Claim/.test(await text('.slab__act .cta'));
-    if (!canClaim && !REHEARSAL) throw new Error(`expected a "Claim" button, found: ${await text('.slab__act')}`);
+    const canClaim = /Claim/.test(await text('.dock .act'));
+    if (!canClaim && !REHEARSAL) throw new Error(`expected a "Claim" button, found: ${await text('.dock')}`);
 
     // ---- pre-roll (not filmed): open on a round a bot has already saved, with time to claim in it ----
     for (;;) {
@@ -327,27 +334,32 @@ async function record() {
     // ---- beat 1: the pitch over the live page ----
     await page.evaluate(() => window.scrollTo(0, 0));
     segment('beat1', 1);
-    await caption('Somebody has to do it. <b>If nobody does, everybody pays the last person who did.</b>');
+    await caption('Not It ($NOTIT): <b>a volunteer’s dilemma as a token</b>, live on NEAR testnet.'); // the pitch itself is on the stage
     await sleep(5200);
 
     // ---- beat 2: the guest claims ----
     segment('beat2', 1);
-    await scrollTo('.slab');
+    await page.evaluate(() => window.scrollTo(0, 0));
     await caption('A guest account claims <b>1,000 NOTIT</b> from the contract’s faucet.');
     await sleep(1800);
     if (canClaim) {
-      await page.locator('.slab__act .cta').click();
+      await page.locator('.dock .act').click();
       event('claim clicked', { round: await round() });
+      // Claimed when the button is no longer the claim button and the explorer link is there.
       await settle(
         'beat2',
-        page.waitForFunction(() => /1,000\.00/.test(document.querySelector('.you__balance .sr-only')?.textContent ?? ''), null, { timeout: 90_000 }),
+        page.waitForFunction(
+          () => !/Claim/.test(document.querySelector('.dock .act')?.textContent ?? 'Claim') && document.querySelector('.txlink a') !== null,
+          null,
+          { timeout: 90_000 },
+        ),
       );
-      event('claim confirmed', { balance: await text('.you__balance .sr-only') });
+      event('claim confirmed', { balance: await balance() });
     } else {
       log('rehearsal: this account has already claimed here, so the claim is skipped');
       await sleep(3000);
     }
-    await caption('The balance shows <b>1,000 NOTIT</b>. A real transaction on NEAR testnet.');
+    await caption('The guest now holds <b>1,000 NOTIT</b>. A real transaction on NEAR testnet.');
     await sleep(900);
     for (const href of await page.locator('.txlink a').evaluateAll((els) => els.map((a) => a.href))) facts.txs.push({ what: 'claim', href });
     await sleep(1400);
@@ -369,27 +381,28 @@ async function record() {
     await marker(false);
     segment('beat3', 1);
     await sleep(3600);
-    if (!/I'll do it/.test(await text('.slab__act .cta'))) throw new Error(`cannot volunteer: ${await text('.slab__act')}`);
-    const shown = await text('.cost__value .sr-only');
-    await page.locator('.slab__act .cta').click();
+    if (!/I'll do it/.test(await text('.dock .act')) || (await page.locator('.dock .act:not([disabled])').count()) === 0) throw new Error(`cannot volunteer: ${await text('.dock')}`);
+    const shown = await text('.act__cost .sr-only');
+    const heldBefore = await balance();
+    await page.locator('.dock .act').click();
     event('volunteer clicked', { round: r1, costShown: shown, secondsLeft: await secondsLeft() });
     await settle(
       'beat3',
       page.waitForFunction(
-        () =>
-          (/You did it/.test(document.querySelector('.slab__act .cta')?.textContent ?? '') && /are It/.test(document.querySelector('.throne')?.textContent ?? '')) ||
-          document.querySelector('.cta__hint--note, .cta__hint--warn') !== null,
+        () => (document.querySelector('.stamp') !== null && document.querySelector('.face--it.face--you') !== null) || document.querySelector('.act__alert') !== null,
         null,
         { timeout: 90_000 },
       ),
     );
-    if (!/You did it/.test(await text('.slab__act .cta'))) throw new Error(`volunteer was refused: ${await text('.slab__act')}`);
-    const burned = await text('.cost__value .sr-only');
-    event('volunteer confirmed', { burned, state: await text('.slab__state') });
+    if (!/You did it/.test(await text('.stamp'))) throw new Error(`volunteer was refused: ${await text('.dock')}`);
+    // What was burned is what left the balance (the figure under the stage counts down to it).
+    await sleep(1100);
+    const burned = fmt(num(heldBefore) - num(await balance()));
+    event('volunteer confirmed', { burned, state: await text('.stamp'), tableBurned: await mine(2) });
     await caption(`The guest burns <b>${burned} NOTIT</b> and is now <b>It</b>. A real transaction on NEAR testnet.`);
-    await sleep(1200);
+    await sleep(600);
     for (const href of await page.locator('.txlink a').evaluateAll((els) => els.map((a) => a.href))) facts.txs.push({ what: 'volunteer', href });
-    await sleep(2200);
+    await sleep(1700);
     await shot('you-are-it.png');
     await sleep(1900);
     facts.burned = burned;
@@ -412,29 +425,28 @@ async function record() {
     while ((await secondsLeft()) > 4 && (await round()) === r2) await sleep(150);
     await marker(false);
     segment('beat4', 1);
-    const flashed = () => document.querySelector('.slab__ticker--live.slab__ticker--collapsed') !== null;
-    const before = await text('.you__balance .sr-only');
-    const collectedBefore = await text('.you .kv div:nth-child(3) dd');
+    const flashed = () => document.querySelector('.stage--paid') !== null;
+    const before = await balance();
+    const collectedBefore = await mine(3);
     const collapse = page.waitForFunction(flashed, null, { timeout: 60_000 });
     collapse.catch(() => {});
     // Run the clock out, then give the chain a moment; a longer wait is fast-forwarded.
     while ((await secondsLeft()) > 0 && (await round()) === r2) await sleep(150);
     await settle('beat4', collapse);
-    event('collapse seen', { round: r2, ticker: await text('.slab__ticker') });
+    event('collapse seen', { round: r2, line: await text('.stage__line'), note: await text('.act__note') });
     await caption('Nobody stepped up. <b>Everyone paid 15% to It.</b>');
     await sleep(1300);
     // The app's own "+…" chip next to the balance is the amount that just arrived.
-    const gained = (await text('.you .delta')).replace(/^\+/, '');
+    const gained = (await text('.figs__delta')).replace(/^\+/, '');
     await shot('collapse.png');
     await sleep(1600);
-    const collected = await text('.you .kv div:nth-child(3) dd');
-    const after = await text('.you__balance .sr-only');
+    const collected = await mine(3);
+    const after = await balance();
     event('collapse settled', { balanceBefore: before, balanceAfter: after, gained, collected });
     facts.collapse = { round: r2, balanceBefore: before, balanceAfter: after, gained, collected };
-    // If the chip was missed, use the rise of the app's own "You collected" figure, so the
-    // caption never differs from the panel by a rounding unit.
-    const num = (v) => Number(v.replace(/,/g, ''));
-    const rise = (num(collected) - num(collectedBefore)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // If the chip was missed, use the rise of the app's own "Collected" figure in the table (or
+    // of the balance), so the caption never differs from the page by a rounding unit.
+    const rise = collected && collectedBefore ? fmt(num(collected) - num(collectedBefore)) : fmt(num(after) - num(before));
     facts.collapse.shown = gained || rise;
     await caption(`Nobody stepped up. <b>Everyone paid 15% to It:</b> +${facts.collapse.shown} NOTIT.`);
     await sleep(3600);
@@ -445,15 +457,15 @@ async function record() {
     if (facts.locked || FORCE_LOCK_BEAT) {
       // The lock line on the Play page, then rule five on the Rules page.
       await caption('No admin. <b>The contract account has no access keys</b>, so nobody can change the rules — including its author.');
-      await scrollTo('.chainbar', 150, true);
+      await scrollTo('.chainbar', 380, true);
       await sleep(4800);
       await page.getByRole('tab', { name: 'Rules' }).click();
       await page.waitForSelector('.rules');
-      await scrollTo('.rule:nth-child(5)', 250);
+      await scrollTo('.rule:nth-child(5)', 300);
       await sleep(4800);
     } else {
       await caption('Every round is on chain: <b>who did it, what they burned, what they collected.</b>');
-      await scrollTo('.stats', 14, true);
+      await scrollTo('.strip', BAND + 20, true);
       await sleep(8200);
     }
 
@@ -462,7 +474,7 @@ async function record() {
     await page.getByRole('tab', { name: 'Lab' }).click();
     await caption('More people who could act → <b>less likely anyone does.</b> Simulated against the theory.');
     await page.waitForSelector('#by-n');
-    await scrollTo('.lab__grid', 12);
+    await scrollTo('.lab__grid', BAND + 14);
     await page.waitForFunction(() => /Done/.test(document.querySelector('.controls__status')?.textContent ?? ''), null, { timeout: 60_000 });
     await sleep(1500);
     // Three pushes of the slider, pausing so the simulated point for each size appears.

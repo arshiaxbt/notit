@@ -55,9 +55,9 @@ small {
 }
 
 :focus-visible {
-  outline: 3px solid var(--focus);
+  outline: var(--border) solid var(--focus);
   outline-offset: 3px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 [hidden] {
@@ -82,12 +82,12 @@ small {
   left: 12px;
   top: -60px;
   z-index: 50;
-  padding: 10px 14px;
+  padding: var(--space-3) var(--space-4);
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 800;
   border: var(--border) solid var(--accent-ink);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }
 .skip:focus {
   top: 12px;

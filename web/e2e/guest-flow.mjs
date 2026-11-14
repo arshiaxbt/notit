@@ -54,10 +54,10 @@ const text = async (selector) => ((await page.locator(selector).first().textCont
 try {
   // 1. Watch: live state with no account.
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#round-heading', { timeout: 45_000 });
+  await page.waitForSelector('.stage .face', { timeout: 45_000 });
   await page.waitForSelector('.chainbar', { timeout: 10_000 });
   await page.waitForFunction(() => !/Checking/.test(document.querySelector('.lock')?.textContent ?? ''), null, { timeout: 30_000 });
-  log('live state:', await text('#round-heading'), '|', await text('.slab__state'), '|', await text('.lock'));
+  log('live state:', await text('.clock .sr-only'), '|', await text('.stage__line'), '|', await text('.lock'));
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT_DIR}/testnet-watch-desktop.png`, fullPage: true });
 
@@ -66,14 +66,14 @@ try {
   await page.getByRole('button', { name: /Play as guest|Continue as guest/ }).click();
   log('clicked "Play as guest"');
   await page.waitForFunction(
-    () => /1,000\.00/.test(document.querySelector('.you__balance')?.textContent ?? '') || document.querySelector('.steps__item--failed') !== null,
+    () => /1,000\.00/.test(document.querySelector('.figs__item dd')?.textContent ?? '') || document.querySelector('.act__alert') !== null,
     null,
     { timeout: 150_000 },
   );
-  if (await page.locator('.steps__item--failed').count()) {
+  if (await page.locator('.act__alert').count()) {
     throw new Error(`guest sign-up failed: ${await text('.guest')}`);
   }
-  log(`guest ready in ${((Date.now() - started) / 1000).toFixed(1)}s:`, await text('.acct__id'), '| balance', await text('.you__balance'));
+  log(`guest ready in ${((Date.now() - started) / 1000).toFixed(1)}s:`, await text('.acct__id'), '| balance', await text('.figs__item dd .sr-only'));
   await collectTx();
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT_DIR}/testnet-guest-desktop.png`, fullPage: true });
@@ -84,28 +84,28 @@ try {
   while (!done && Date.now() < deadline) {
     await page.waitForFunction(
       () => {
-        const b = document.querySelector('.slab__act .cta');
+        const b = document.querySelector('.dock .act');
         return b && !b.disabled && /I'll do it/.test(b.textContent ?? '');
       },
       null,
       { timeout: 200_000 },
     );
-    log('volunteering:', await text('#round-heading'), '|', await text('.slab__act .cta'));
+    log('volunteering:', await text('.stage .face'), '|', await text('.dock .act'));
     const sent = Date.now();
-    await page.locator('.slab__act .cta').click();
+    await page.locator('.dock .act').click();
     await page.waitForFunction(
       () =>
-        /You did it/.test(document.querySelector('.slab__act .cta')?.textContent ?? '') ||
-        document.querySelector('.cta__hint--note, .cta__hint--warn') !== null,
+        document.querySelector('.stamp') !== null ||
+        document.querySelector('.act__alert') !== null,
       null,
       { timeout: 60_000 },
     );
     await collectTx();
-    const result = await text('.slab__act');
+    const result = await text('.dock');
     log(`answer after ${((Date.now() - sent) / 1000).toFixed(1)}s:`, result.slice(0, 200));
     if (/You did it/.test(result)) {
-      await page.waitForFunction(() => /are It/.test(document.querySelector('.throne')?.textContent ?? ''), null, { timeout: 30_000 });
-      log('throne:', await text('.throne__who'), '|', await text('.slab__state'));
+      await page.waitForFunction(() => document.querySelector('.face--it.face--you') !== null, null, { timeout: 30_000 });
+      log('It:', await text('.face--it.face--you') === '' ? 'you' : '?', '|', await text('.stamp'));
       done = true;
     } else {
       log('not this round; waiting for the next one');
@@ -127,7 +127,7 @@ try {
   const mobile = await phone.newPage();
   await mobile.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await mobile.waitForSelector('.acct__id', { timeout: 45_000 });
-  await mobile.waitForSelector('#round-heading', { timeout: 45_000 });
+  await mobile.waitForSelector('.stage .face', { timeout: 45_000 });
   await mobile.waitForTimeout(1500);
   const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (overflow > 0) problems.push(`mobile horizontal overflow: ${overflow}px`);

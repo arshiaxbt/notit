@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { chainConfig } from './client/config';
+import { DEFAULT_CROWD, STRATEGIES } from './client/bots';
 import { MockClient } from './client/MockClient';
 import { ChainSession } from './client/session';
 import type { GameClient } from './client/types';
@@ -28,8 +29,11 @@ function initialMode(testnetAvailable: boolean): Mode {
 }
 
 function newDemo(roundSeconds?: number): MockClient {
+  // `?crowd=quiet` fills the demo with holders who never volunteer: the quickest way to watch unsaved rounds.
+  const quiet = new URLSearchParams(window.location.search).get('crowd') === 'quiet';
+  const crowd = quiet ? DEFAULT_CROWD.map((b) => ({ ...b, strategy: STRATEGIES.freeRider })) : undefined;
   // The played-in history is the same for everyone; what happens next is not.
-  return new MockClient({ roundSeconds, liveSeed: Date.now() & 0x7fffffff });
+  return new MockClient({ roundSeconds: roundSeconds ?? (quiet ? 10 : undefined), crowd, liveSeed: Date.now() & 0x7fffffff });
 }
 
 export function App() {
@@ -72,6 +76,18 @@ export function App() {
 
   const restartDemo = useCallback(() => setDemo((d) => newDemo(d.roundSeconds())), []);
 
+  // The stage fills what the header leaves of the first viewport, however tall the header is
+  // (it gains a row on a phone once an account is signed in).
+  useLayoutEffect(() => {
+    const top = document.querySelector<HTMLElement>('.top');
+    if (!top) return;
+    const set = () => document.documentElement.style.setProperty('--chrome-h', `${top.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(top);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div className="app">
       <a className="skip" href="#main">
@@ -88,7 +104,7 @@ export function App() {
         theme={theme}
         onToggleTheme={toggle}
       />
-      <main id="main" className="main" tabIndex={-1}>
+      <main id="main" className={tab === 'play' ? 'main main--bleed' : 'main'} tabIndex={-1}>
         <div role="tabpanel" id="panel-play" aria-labelledby="tab-play" hidden={tab !== 'play'}>
           {tab === 'play' && (
             <Play
