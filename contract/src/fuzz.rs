@@ -1,4 +1,4 @@
-//! Randomised invariant test, written by the independent reviewer during the pre-lock audit.
+//! Randomised invariant test, written by a separate AI review session during the pre-lock code review.
 //!
 //! Random legal operations (claim, volunteer, transfer, transfer-and-call with mocked
 //! receiver replies, forced unregister, register, poke) at random times, over several
@@ -318,7 +318,7 @@ fn random_operations_keep_the_invariants() {
         (150_000, 10u128.pow(31), 10, 1, 1),
         (1, 7, 100_000, 1, 999_999),
     ];
-    // Defaults keep `cargo test` quick. The pre-lock audit ran
+    // Defaults keep `cargo test` quick. The pre-lock review ran
     // NOTIT_FUZZ_SEEDS=40 NOTIT_FUZZ_STEPS=700 (and longer) over the same parameter sets.
     let seeds: u64 = std::env::var("NOTIT_FUZZ_SEEDS")
         .ok()

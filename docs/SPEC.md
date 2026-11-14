@@ -9,7 +9,7 @@ This file is the single source of truth for the contract (`contract/`, Rust), th
 1. Time is split into rounds.
 2. In each round the **sacrifice cost** starts high and falls linearly until the deadline.
 3. The first holder to **volunteer** in a round burns the current cost from their own balance. The round is **saved** and that holder becomes **It** — the last person who did it.
-4. If a round ends unsaved, every balance is cut and the whole cut is paid to It. At most `MAX_COLLAPSE_RUN` unsaved rounds in a row are charged; after that the game is **dormant** until somebody volunteers again. Before the first volunteer ever there is no It and nothing is charged.
+4. If a round ends unsaved, every balance is cut and the whole cut is paid to It. At most `MAX_COLLAPSE_RUN` unsaved rounds in a row are charged; after that the game is **dormant** (the app says "asleep") until somebody volunteers again. Before the first volunteer ever there is no It and nothing is charged.
 5. Nobody can change the rules after deployment.
 
 Why the stakes are real: a save moves value from the volunteer to everyone (the burn); a collapse moves value from everyone to It. Neither is a uniform rebase.
@@ -54,7 +54,7 @@ Validation in `new` (`ERR_PARAMS`): `round_ns ≥ 10^9`; `0 < min_cost_ppm ≤ m
 | `collapse_run` | u32 | 0 |
 | `claimed` | set of accounts | empty (survives unregistration) |
 | `claims_made` | u32 | 0 |
-| `stats` | §7 | zero |
+| `stats` | §6 | zero |
 | `history` | list of entries, §7 | empty |
 | `heroes[a]` | `{ saves: u32, burned: u128, collected: u128 }` | absent (survives unregistration) |
 

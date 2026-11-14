@@ -2,7 +2,7 @@
 
 **What it is, in one sentence:** a recurring Dutch auction for a seat ("It") that collects 15 % from every other holder whenever a round finds no bidder. For large holders it is a volunteer's dilemma; for everyone else it is a last-mover contest in the family of Fomo3D, with a falling entry price and a levy on holders in place of a pot. It is zero-sum in ownership, and close to zero expected value under competitive play.
 
-This page states the rules, shows why the stakes are not an accounting illusion, works out what rational holders do, and lists the objections we know of. It was reviewed twice by independent reviewers: once before the contract was written, and once against the rules as deployed. The second review corrected several claims that an earlier version of this page got wrong; the corrections are marked. The normative rules are in [SPEC.md](SPEC.md); the code is in [`contract/src/lib.rs`](../contract/src/lib.rs).
+This page states the rules, shows why the stakes are not an accounting illusion, works out what rational holders do, and lists the objections we know of. It was reviewed twice as a mechanism, both times by a separate Claude session that had the rules but not the reasoning behind them (there was no human review): once before the contract was written, and once against the rules as deployed. The second review corrected several claims that an earlier version of this page got wrong; the corrections are marked. The normative rules are in [SPEC.md](SPEC.md); the code is in [`contract/src/lib.rs`](../contract/src/lib.rs).
 
 ## Rules
 
@@ -89,7 +89,7 @@ Two consequences:
 `npm run lab` runs the real rules with scripted strategies (output in [lab-output.txt](lab-output.txt)):
 
 - **A. Bystander effect.** With identical holders deciding in the final block and playing the equilibrium probability, the simulated share of unsaved rounds follows the first-pays equilibrium: 0.3 % with 3 holders, 3.7 % with 10, 20 % with 30, 67 % with 60, and 100 % from 75 up. The table prints the textbook figure (every volunteer pays) beside it for comparison.
-- **B. Large holders present.** With 50 holders and Pareto-distributed balances (almost all above the threshold), no round ever fails. The five largest holders pay 54 % of all burns and their share of the supply falls from 45 % to 10 %.
+- **B. Large holders present.** With 50 holders and Pareto-distributed balances (18 of the 50 above the threshold), no round ever fails. The five largest holders pay 54 % of all burns and their share of the supply falls from 45 % to 10 %.
 - **B2. A dispersed crowd.** With 100 equal holders at 1 % each, holders who only look one round ahead never volunteer: It collects for 8 rounds, ends with 73 % of the supply, and the game sleeps. Holders who value being It save 99 % of rounds, but burn 88 % of the supply competing for it.
 - **C. Idle holders.** With 30 holders who never act among 40, the idle holders' share of the supply goes from 75 % to 0 %.
 - **D. Forward-looking holders.** The bound above is 1.32 % with the deployed parameters. A scripted strategy that values the seat from the last 20 rounds stays within it at 20, 50 and 100 equal holders (0 %, 0 %, 1.0 % unsaved) and exceeds it at 200 (4.0 %), because its short memory lets a round fail every twenty-odd rounds; the table says so. The symmetric equilibrium in A is also not the only one: there are asymmetric ones in which one designated holder always volunteers and no round fails.
@@ -102,7 +102,8 @@ Two consequences:
 | Cost at round open | 5 % of supply | Caps what one round can charge for the seat. A defender of any size waits anyway, because the price only falls |
 | Cost at the deadline | 0.2 % of supply | Sets the one-round threshold at 1.33 % of supply, and the competitive failure rate at about 1.3 % |
 | Charged rounds in a row | 8 | Bounds what an unattended game can take from idle holders while It is absent: at most 1 − 0.85^8 = 73 % |
-| Faucet claim | 1,000 NOTIT, once per account | A newcomer can afford the floor price while the supply is under 500,000 NOTIT |
+| Faucet claim | 1,000 NOTIT, once per account, at most 100,000 claims | A newcomer can afford the floor price while the supply is under 500,000 NOTIT |
+| Storage fee | 0.005 NEAR per registered account | Pays for the account record and the records that outlive it; half is returned on unregistering |
 
 ## Objections we know of
 
@@ -120,6 +121,6 @@ Two consequences:
 - **Function-call keys can burn.** `volunteer` needs no deposit, so a function-call key for this contract can burn up to 5 % of the supply from the holder's balance per round. This is deliberate: it is what lets a guest's browser hold a key that can only volunteer. `ft_transfer` still requires 1 yoctoNEAR, so such a key cannot move tokens to somebody else.
 - **Block timestamps.** Rounds are measured with the block timestamp, which block producers set once per block. "Seconds left" is therefore accurate to about one block.
 - **Indexers.** An unsaved round changes every balance through one index update and is reported by a single `rounds_closed` event, not by a transfer event per holder. An indexer that only replays NEP-141 transfer events will drift from `ft_balance_of`.
-- **Storage.** The contract pays for the history and volunteer records from its own balance: about 0.0015 NEAR per saved round and 0.0022 NEAR per new volunteer. If the balance runs out, calls that add a record fail until somebody sends the account NEAR, which anybody can do. The deployments were funded before they were locked (amounts in the README).
+- **Storage.** The contract pays for the history and volunteer records from its own balance: about 0.0015 NEAR per saved round and 0.0022 NEAR per new volunteer. If the balance runs out, calls that add a record fail until somebody sends the account NEAR, which anybody can do. The deployments were funded before they were locked; the README gives the amounts and how long they last.
 - **What the lab does not show.** It uses scripted strategies. It shows what the rules imply for those strategies, not how people behave. The forward-looking result is derived by hand and compared with one family of scripted strategies; it is not a proof for all strategies.
 - **Rule changes we considered and did not make.** A higher opening price (15 %) would widen the range in which the save time is a price. Barring It from volunteering would not stop re-arming, because a second account does the same job. A random winner among same-block volunteers would blunt the speed advantage but is untested code. The deployed rules are locked.

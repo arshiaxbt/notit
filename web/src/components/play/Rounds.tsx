@@ -74,6 +74,7 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
       title={<RoundLabel round={s.round} />}
       aside={
         <ul className="legend" aria-label="Legend">
+          <li className="legend__scope">last {cells.length} rounds</li>
           <li>
             <span className="legend__swatch legend__swatch--saved" aria-hidden="true" /> Saved <b>{saved}</b>
           </li>

@@ -323,7 +323,7 @@ function spokenStatus(snap: GameSnapshot, live: Live, scale: number): string {
 
 
 /** Testnet with nobody signed in: one click to play as a guest, or a wallet. */
-function SignIn({ chain, claimAmount, onUseDemo }: { chain: ChainUi; claimAmount: bigint; onUseDemo(): void }) {
+function SignIn({ chain, claimAmount, cost, onUseDemo }: { chain: ChainUi; claimAmount: bigint; cost: string | null; onUseDemo(): void }) {
   const { session, state } = chain;
   const { guest, wallet, restoring } = state;
   const running = guest.status === 'running';
@@ -384,7 +384,15 @@ function SignIn({ chain, claimAmount, onUseDemo }: { chain: ChainUi; claimAmount
             {wallet.error} {connect('Try again')}
           </span>
         ) : (
-          connect(wallet.busy ? 'Opening wallets…' : 'Connect wallet')
+          // Before anyone signs in: what volunteering costs right now, and the other way in.
+          <>
+            {cost !== null && (
+              <span className="act__now">
+                cost now <Digits text={cost} /> ·{' '}
+              </span>
+            )}
+            {connect(wallet.busy ? 'Opening wallets…' : 'Connect wallet')}
+          </>
         )}
       </div>
     </>
@@ -457,7 +465,7 @@ function Act({ game, snap, chain, flash, scale, onUseDemo }: { game: Game; snap:
         {spoken}
       </p>
       {signUp && chain ? (
-        <SignIn chain={chain} claimAmount={config.claimAmount} onUseDemo={onUseDemo} />
+        <SignIn chain={chain} claimAmount={config.claimAmount} cost={!s.saved && s.roundSupply > 0n ? amount(live.cost) : null} onUseDemo={onUseDemo} />
       ) : (
         <>
           <button
@@ -834,7 +842,7 @@ export function Figures({ snap, flash }: { snap: GameSnapshot; flash: RoundClose
   // What the round that just closed did to this balance: a cut, or a payment to It.
   const delta = paid && flash.balanceBefore !== null && flash.balanceAfter !== null ? flash.balanceAfter - flash.balanceBefore : 0n;
 
-  const figs: Fig[] = [
+  const withBalance: Fig[] = [
     {
       key: 'keep',
       label: 'keep',
@@ -873,6 +881,18 @@ export function Figures({ snap, flash }: { snap: GameSnapshot; flash: RoundClose
       title: `You do it now: ${of} after burning the cost`,
     },
   ];
+  // With nothing held yet (signed out, or before a claim) the row leads with the number the whole
+  // game turns on: what it costs to volunteer right now, from the same tick as the button's.
+  const figs: Fig[] = hasTokens
+    ? withBalance
+    : [
+        {
+          key: 'cost',
+          label: 'cost now',
+          value: open ? <Digits text={amount(live.cost)} /> : '—',
+          title: 'What volunteering costs right now; it falls until the round ends',
+        },
+      ];
   if (s.it && s.it !== me) {
     const gain = itAccount ? itCollects(s.totalSupply, itAccount.balance, config.cutPpm) : 0n;
     figs.push(
@@ -888,7 +908,7 @@ export function Figures({ snap, flash }: { snap: GameSnapshot; flash: RoundClose
   }
 
   return (
-    <dl className="figs" aria-label={`What each ending of this round does to ${of}`}>
+    <dl className="figs" aria-label={hasTokens ? `What each ending of this round does to ${of}` : 'What volunteering costs right now, and what It collects if nobody does'}>
       {figs.map((f) => (
         <div key={f.key} className={cls('figs__item', f.tone && `figs__item--${f.tone}`)} title={f.title}>
           <dt>{f.label}</dt>

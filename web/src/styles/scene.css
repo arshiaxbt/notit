@@ -445,6 +445,10 @@
   text-align: center;
   translate: -50% 0;
 }
+.act__now .digits {
+  font-weight: 800;
+  font-stretch: 75%;
+}
 .act__say {
   display: block;
   text-wrap: balance;

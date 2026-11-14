@@ -2,7 +2,7 @@
   "name": "notit",
   "private": true,
   "version": "0.1.0",
-  "description": "Not It ($NOTIT): a volunteer's-dilemma memecoin on NEAR",
+  "description": "Not It ($NOTIT): a memecoin on NEAR whose mechanic is a recurring auction for one seat",
   "license": "MIT",
   "workspaces": [
     "engine",

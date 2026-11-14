@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/arshiaxbt/notit/actions/workflows/ci.yml/badge.svg)](https://github.com/arshiaxbt/notit/actions/workflows/ci.yml)
 
-A memecoin whose only mechanic is a volunteer's dilemma with real stakes, on NEAR.
+A memecoin whose only mechanic is a recurring auction for one seat, "It": a volunteer's dilemma for large holders, a last-mover contest for everyone else. On NEAR testnet.
 
 **Somebody has to do it. If nobody does, everybody pays the last person who did.**
 
@@ -15,7 +15,7 @@ A 70-second recording of one real session on testnet (claim, volunteer, a round 
 | Hackathon | Built at NEAR HACKATHON (development phase 1–14 November 2026). Track: `memecoins` (Memecoins With Mechanics) |
 | Live demo | https://arshiaxbt.github.io/notit/ |
 | Contracts (NEAR testnet) | `notit-play.testnet` (3-minute rounds), `notit-live.testnet` (1-hour rounds). Both locked: no access keys |
-| Status | Testnet only. Test tokens with no value. Not audited |
+| Status | Testnet only. Test tokens with no value. No human or professional audit (see "How correctness is checked") |
 
 ## What it is
 
@@ -37,9 +37,9 @@ Not It is built so that every event is a real transfer of ownership. A save move
 
 - **Rules nobody can change.** A NEAR account with no access keys cannot be redeployed or administered. Both deployments were locked by deleting every key (`scripts/lock.sh`); step 4 below shows how to check.
 - **Standards.** NEP-141 token, NEP-145 storage management, NEP-148 metadata, NEP-297 events, so wallets and explorers read it without custom code.
-- **Cheap, fast finality.** A round is decided in its last seconds; one-second blocks and negligible fees make a three-minute round playable.
+- **Cheap, fast finality.** A round is decided in its last seconds; blocks of about 0.6 seconds and negligible fees make a three-minute round playable.
 - **One-click play with a key that can only volunteer.** The web app creates a faucet-funded testnet account in the browser, claims, and then replaces the account's full-access key with function-call access keys limited to `volunteer` and `poke` on the two game contracts (one transaction: add two keys, delete the full one). `volunteer` takes no deposit precisely so that such a key can play. Wallet login uses NEAR Connect.
-- **Named accounts.** It, the volunteers and the bots are readable account names on the hero wall.
+- **Named accounts.** It, the volunteers and the bots are readable account names in the volunteer table.
 - **NEAR Sandbox** runs the compiled contract in the integration test.
 
 | NEAR feature | Where it is used | How to check |
@@ -96,7 +96,7 @@ You should see `pass 52` and `fail 0`.
 
 ### 3. Run the contract tests
 
-Needs Rust (`rustup`; the pinned toolchain in `contract/rust-toolchain.toml` installs itself) and `cargo-near`. A cold build takes about 5 minutes and about 1 GB of disk:
+Needs Rust (`rustup`; the pinned toolchain in `contract/rust-toolchain.toml` installs itself) and `cargo-near`. A cold build takes about 5 minutes and about 1.6 GB of disk:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/download/cargo-near-v0.23.0/cargo-near-installer.sh | sh
@@ -107,6 +107,8 @@ cargo test
 You should see `test result: ok. 43 passed` for the unit tests (they include `contract_matches_the_typescript_engine_on_generated_scenarios` and `random_operations_keep_the_invariants`, which take a minute or two each), and then `test result: ok. 1 passed` for the integration test `full_game_loop_on_sandbox`. The integration test builds the WebAssembly contract and plays a full game on a local NEAR Sandbox node (first run downloads the sandbox binary).
 
 ### 4. Read the live contract
+
+From the repository root (`cd ..` if you are still in `contract/`).
 
 No account needed:
 
@@ -142,7 +144,7 @@ You should see `"link":"https://github.com/arshiaxbt/notit"`.
 
 Open https://arshiaxbt.github.io/notit/.
 
-1. The page opens in Testnet mode on the live round. You should see the holders as faces on a ring, all looking away; a clock ring burning down in the middle; and It, the dark face inside it. The cost is on the button and falls every second.
+1. The page opens in Testnet mode on the live round. You should see the holders as faces on a ring, all looking away; a clock ring burning down in the middle; and It, the dark face inside it. The cost to volunteer falls every second: it is shown as "cost now" under the button, and on the button itself once you are signed in.
 2. Press **Play as guest**. In about fifteen seconds you should see five steps go by (a new testnet account, a claim of 1,000 NOTIT on each deployment, "Locking the key"), then your balance and the words **key: volunteer only** by your account. From then on the key in your browser can only call `volunteer` and `poke` on the two game contracts. If the public faucet is busy, the page says so and offers the demo.
 3. Press **I'll do it**. You should see "Sending", then your face move to the middle of the ring: you are It.
 4. Do nothing for a round. If nobody else volunteers, you should see the ring flash red, a coin travel from every face to yours, and "paid to It" rise by 15 % of everyone else's balance.
@@ -196,11 +198,13 @@ Open the printed URL. You should see the same app.
 | Round length | 3 minutes | 1 hour |
 | Parameters | cost 5 % → 0.2 % of supply, cut 15 %, at most 8 charged rounds in a row, claim 1,000 NOTIT | same |
 | Funded for storage | 14 NEAR | 9.5 NEAR |
+| Storage runway | about 7,700 more saved rounds: at least 16 days even if every round were saved | about 4,800: more than six months |
+| Faucet | 1,000 NOTIT once per account, at most 100,000 claims; registering an account costs a 0.005 NEAR storage fee | same |
 | Code hash | SHA-256 `6ad5c6c2e1151495d5860be629d3bca3d52195768b98f746d29961f637f9ff1d` (shown by NEAR RPC in base58 as `8C3HHxpY9N2FCmKkYJN6GdFPmBGXip3UMBfHg5nrecb6`) | same |
 
 The contract pays for its own history records (see Limits). Anybody can send either account NEAR to extend that. The deployed WebAssembly is committed as [`contract/deployed/notit.wasm`](contract/deployed/notit.wasm): `sha256sum contract/deployed/notit.wasm` prints the hash above, and the `view_account` RPC query returns the same hash as `code_hash` for both accounts. A local rebuild can differ in a few bytes, because file paths and line numbers are part of the compiled code and the build is only bit-for-bit reproducible inside the cargo-near Docker image.
 
-A small fleet of bots (`bots/`) plays both deployments so that rounds are sometimes saved and sometimes not. The bots share one operator; when one of them ends up holding most of the fleet's tokens it sends some back to the others, so the demonstration does not stall (see `bots/README.md`).
+A small fleet of bots (`bots/`) plays both deployments so that rounds are sometimes saved and sometimes not. The bots share one operator; when one of them ends up holding most of the fleet's tokens it sends some back to the others, so the demonstration does not stall (see `bots/README.md`). They run from the author's server; `.github/workflows/bots.yml` is a backup that needs the fleet's testnet keys as repository secrets and has not been switched on.
 
 ## Repository layout
 
@@ -221,7 +225,7 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 - **Two independent implementations.** The contract and the TypeScript engine were written separately from docs/SPEC.md. A generator in the engine produces 42 scenarios (2,075 steps: claims, volunteers, transfers, unregistrations, long idle gaps, refused actions). A contract test replays them and requires the stored state to match integer for integer.
 - **Unit tests** for each rule in the specification, on both sides.
 - **Integration test** on NEAR Sandbox with the compiled contract.
-- **Independent reviews.** Before the contract was written, the design was reviewed as a mechanism; that review found that the first version's uniform cut was economically neutral, which led to the current rules. The rules as deployed were then reviewed again by a game theorist, who found that the lab's first bystander formula was the textbook one (every volunteer pays) and not the equilibrium of our rule (only the first pays), and that two claims in the write-up were wrong; the lab and docs/MECHANISM.md were corrected, and the corrections are marked there. Before the contract was locked, a separate adversarial code review fuzzed it and exercised it on a sandbox node; it found no way to block the contract or to create or take tokens, and its smaller findings were fixed or are listed as limits. Its fuzz test is in the repository (`contract/src/fuzz.rs`): random operations over 7 parameter sets, including extreme ones and transfer-and-call refunds, with invariants checked after every step. `cargo test` runs a quick version; the audit ran `NOTIT_FUZZ_SEEDS=40 NOTIT_FUZZ_STEPS=700`.
+- **Reviews, and who did them.** All reviews were done by separate Claude sessions that were given the specification or the code but not the reasoning of the session that wrote it; there was no human or professional audit. (1) Before the contract was written, the design was reviewed as a mechanism; that review found that the first version's uniform cut was economically neutral, which led to the current rules. (2) Before the contract was locked, an adversarial code review fuzzed it and exercised it on a sandbox node; it found no way to block the contract or to create or take tokens, and its smaller findings were fixed or are listed as limits. Its fuzz test is in the repository (`contract/src/fuzz.rs`): random operations over 7 parameter sets, including extreme ones and transfer-and-call refunds, with invariants checked after every step. `cargo test` runs a quick version; the review ran `NOTIT_FUZZ_SEEDS=40 NOTIT_FUZZ_STEPS=700`. (3) The rules as deployed were reviewed as a game; that review found that the lab's first bystander formula was the textbook one (every volunteer pays) and not the equilibrium of our rule (only the first pays), and that two claims in the write-up were wrong. The lab and docs/MECHANISM.md were corrected, and the corrections are marked there. (4) The web app was tested by a separate QA session across ten screen sizes, two themes and two browsers.
 - **CI** runs all of the above and checks that the lab output is reproducible (`.github/workflows/ci.yml`).
 
 ## Limits
@@ -229,7 +233,7 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 - Testnet only; the tokens have no value. Nothing here is financial advice.
 - The faucet claim has no sybil resistance.
 - A guest account whose key has been locked can never do anything but volunteer: it cannot move its NEAR or tokens, or add a key. It is a throwaway testnet account by design.
-- Not audited. Known weaknesses are listed in [docs/MECHANISM.md](docs/MECHANISM.md#limits-and-known-weaknesses).
+- No human or professional audit; the reviews were done by AI reviewer sessions. Known weaknesses are listed in [docs/MECHANISM.md](docs/MECHANISM.md#limits).
 - The lab simulates scripted strategies. It shows what the rules imply for those strategies, not how people behave.
 
 ## Hackathon disclosures
