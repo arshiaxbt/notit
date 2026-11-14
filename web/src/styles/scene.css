@@ -241,8 +241,48 @@
 /* ---- motion that says "everyone looks away and hopes someone else does it" ----
    Transform, opacity, translate and scale only; nothing here costs layout. */
 
-/* first load: the faces arrive one after another */
-.stage--arriving .face,
+/* first load, once: the sentence settles, the ring draws on, the faces arrive in a sweep from
+   twelve o'clock, then your face, then the button rises into place. Under 900 ms in all. */
+.stage--arriving .stage__pitch {
+  animation: pitch-in 0.22s ease-out both;
+}
+@keyframes pitch-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.ring .ring__cover {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: butt;
+  animation: ring-draw 0.3s ease-out 0.1s both;
+}
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+.stage--arriving .clock,
+.stage--arriving .stage__under {
+  animation: arrive 0.2s linear 0.3s both;
+}
+.stage--arriving .face {
+  animation: arrive 0.16s linear both;
+  animation-delay: calc(250ms + var(--sw) * var(--step, 20ms));
+}
+.stage--arriving .dock {
+  animation: dock-in 0.2s ease-out 0.7s both;
+}
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
 .stage--shell .face {
   animation: arrive 0.22s linear both;
   animation-delay: calc(var(--i) * 20ms);
@@ -655,5 +695,28 @@
   }
   .coin {
     display: none;
+  }
+}
+
+/* the five rules stagger in once, the first time the page is seen */
+.rules--arriving .rule {
+  animation: rule-in 0.24s ease-out both;
+}
+.rules--arriving .rule:nth-child(2) {
+  animation-delay: 40ms;
+}
+.rules--arriving .rule:nth-child(3) {
+  animation-delay: 80ms;
+}
+.rules--arriving .rule:nth-child(4) {
+  animation-delay: 120ms;
+}
+.rules--arriving .rule:nth-child(5) {
+  animation-delay: 160ms;
+}
+@keyframes rule-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
 }

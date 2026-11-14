@@ -83,13 +83,15 @@ interface FaceProps {
   out: Point;
   /** Place in the ring, for staggered motion. */
   index: number;
+  /** Rank clockwise from twelve o'clock, for the opening sweep. */
+  sweep?: number;
   label: string;
   id: string;
   tab: boolean;
   onTip(id: string | null): void;
 }
 
-const Face = memo(function Face({ at, r, gaze, it, you, out, index, label, id, tab, onTip }: FaceProps) {
+const Face = memo(function Face({ at, r, gaze, it, you, out, index, sweep = 0, label, id, tab, onTip }: FaceProps) {
   const style = {
     '--r': `${r}px`,
     '--gx': gaze.x.toFixed(3),
@@ -97,6 +99,7 @@ const Face = memo(function Face({ at, r, gaze, it, you, out, index, label, id, t
     '--ox': out.x.toFixed(3),
     '--oy': out.y.toFixed(3),
     '--i': index,
+    '--sw': sweep,
     // Placed with `translate`, so `scale` (breathing) and `transform` (the flinch) act on the face where it stands.
     translate: `${at.x.toFixed(1)}px ${at.y.toFixed(1)}px`,
   } as CSSProperties;
@@ -210,7 +213,7 @@ function useSharedLive(): Live {
 /* ------------------------------------------------------------------- clock */
 
 /** The ring that is both clock and fuse, and the time inside it. The only part of the scene that moves every frame. */
-function Clock({ game, snap, layout, box, flash, asleep, scale }: { game: Game; snap: GameSnapshot; layout: SceneLayout; box: Box; flash: RoundClose | null; asleep: boolean; scale: number }) {
+function Clock({ game, snap, layout, box, flash, asleep, scale, arriving }: { game: Game; snap: GameSnapshot; layout: SceneLayout; box: Box; flash: RoundClose | null; asleep: boolean; scale: number; arriving: boolean }) {
   // Fifteen steps a second: a step of the ring is a fraction of a pixel on chain and under two degrees in the fastest demo.
   const live = useLive(game, 15);
   const s = snap.state;
@@ -254,6 +257,10 @@ function Clock({ game, snap, layout, box, flash, asleep, scale }: { game: Game; 
             </g>
           )}
         </g>
+        {arriving && (
+          // First load: a cover in the stage's own yellow recedes clockwise from twelve, so the ring draws on.
+          <circle className="ring__cover" cx={center.x} cy={center.y} r={r} strokeWidth={stroke + 16} pathLength={1} strokeDasharray="1 1" transform={`rotate(-90 ${center.x} ${center.y})`} />
+        )}
       </svg>
       <div className="clock" style={{ left: center.x, top: center.y - clockR * 0.25, fontSize: `${size.toFixed(1)}px` }} aria-hidden="true">
         <Digits text={text} />
@@ -492,6 +499,9 @@ function Act({ game, snap, chain, flash, scale, onUseDemo }: { game: Game; snap:
 
 /* ------------------------------------------------------------------- stage */
 
+/** The opening choreography has played in this page load. */
+let stagePlayed = false;
+
 function useBox(): [React.RefObject<HTMLDivElement | null>, Box] {
   const ref = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState<Box>({ w: 0, h: 0 });
@@ -575,6 +585,15 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
   );
   // Every face on the ring looks straight away from the centre.
   const gazes = useMemo(() => (layout ? layout.slots.map((p) => away(layout.center, p)) : []), [layout]);
+  // The order the faces arrive in on first load: clockwise from twelve o'clock.
+  const sweeps = useMemo(() => {
+    if (!layout) return [];
+    const angle = (p: Point) => (Math.atan2(p.x - layout.center.x, layout.center.y - p.y) + 2 * Math.PI) % (2 * Math.PI);
+    const byAngle = layout.slots.map((p, i) => ({ i, a: angle(p) })).sort((x, y) => x.a - y.a);
+    const rank: number[] = [];
+    byAngle.forEach((x, k) => (rank[x.i] = k));
+    return rank;
+  }, [layout]);
 
   const [tip, setTip] = useState<string | null>(null);
   const onTip = useCallback((id: string | null) => setTip(id), []);
@@ -598,12 +617,16 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
     const t = window.setTimeout(() => setWatching(false), 560);
     return () => window.clearTimeout(t);
   }, [s.it]);
-  // On first load the faces arrive one after another.
-  const [arriving, setArriving] = useState(true);
+  // First load only: the sentence settles, the clock ring draws on, the faces arrive in a sweep
+  // from twelve o'clock, then your face, then the button. Never again on a refresh of the data or
+  // a return to this tab, and not at all under reduced motion.
+  const [arriving, setArriving] = useState(() => !stagePlayed && !prefersReducedMotion());
   useEffect(() => {
-    const t = window.setTimeout(() => setArriving(false), 1100);
+    if (!arriving) return;
+    stagePlayed = true;
+    const t = window.setTimeout(() => setArriving(false), 1000);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [arriving]);
   useGlances(ref, game, s.round, !s.saved && !asleep && s.roundSupply > 0n);
 
   // Arrow keys walk around the ring; the ring is one stop in the tab order, after the button.
@@ -638,7 +661,7 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
       const label = [p.name ? shortAccount(p.name, layout.compact ? NAME_MAX_COMPACT : NAME_MAX) : 'A holder', isIt ? 'It' : p.note].filter(Boolean).join(' · ');
       placed.push({ id, at, label });
       els.push(
-        <Face key={id} id={id} at={at} r={isIt ? layout.seatR : layout.faceR} gaze={isIt ? STRAIGHT : gazes[idx]!} out={isIt ? STRAIGHT : gazes[idx]!} index={isIt ? 0 : idx} it={isIt} label={label} tab={first} onTip={onTip} />,
+        <Face key={id} id={id} at={at} r={isIt ? layout.seatR : layout.faceR} gaze={isIt ? STRAIGHT : gazes[idx]!} out={isIt ? STRAIGHT : gazes[idx]!} index={isIt ? 0 : idx} sweep={isIt ? 0 : (sweeps[idx] ?? 0)} it={isIt} label={label} tab={first} onTip={onTip} />,
       );
       first = false;
     });
@@ -646,7 +669,7 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
     const youLabel = youAreIt ? 'You · It' : 'You';
     placed.push({ id: 'you', at: youAt, label: youLabel });
     els.push(
-      <Face key="you" id="you" at={youAt} r={youAreIt ? layout.seatR : layout.youR} gaze={youAreIt ? STRAIGHT : layout.dock ? away(layout.you, layout.center) : AT_THE_CLOCK} out={youAreIt ? STRAIGHT : DOWN} index={ring.length} it={youAreIt} you label={youLabel} tab={first} onTip={onTip} />,
+      <Face key="you" id="you" at={youAt} r={youAreIt ? layout.seatR : layout.youR} gaze={youAreIt ? STRAIGHT : layout.dock ? away(layout.you, layout.center) : AT_THE_CLOCK} out={youAreIt ? STRAIGHT : DOWN} index={ring.length} sweep={layout.shown} it={youAreIt} you label={youLabel} tab={first} onTip={onTip} />,
     );
     faces = els;
 
@@ -731,7 +754,14 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
       )}
       aria-label="The game"
       aria-busy={game.stale || undefined}
-      style={layout?.dock ? ({ '--dock-x': `${layout.dock.x}px`, '--dock-y': `${layout.dock.y}px`, '--dock-w': `${layout.dock.w}px` } as CSSProperties) : undefined}
+      style={
+        {
+          ...(layout?.dock ? { '--dock-x': `${layout.dock.x}px`, '--dock-y': `${layout.dock.y}px`, '--dock-w': `${layout.dock.w}px` } : {}),
+          // The sweep fits in 400 ms however many faces there are.
+          '--step': `${Math.min(20, Math.floor(400 / Math.max(1, layout?.shown ?? 1)))}ms`,
+          '--n': layout?.shown ?? 0,
+        } as CSSProperties
+      }
     >
       <h1 className="stage__pitch" ref={pitchRef}>
         Somebody has to do it. If nobody does, everybody pays the last person who did.
@@ -739,7 +769,7 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
       <Act game={game} snap={snap} chain={chain} flash={flash} scale={scale} onUseDemo={onUseDemo} />
       {layout && (
         <>
-          <Clock game={game} snap={snap} layout={layout} box={box} flash={flash} asleep={asleep} scale={scale} />
+          <Clock game={game} snap={snap} layout={layout} box={box} flash={flash} asleep={asleep} scale={scale} arriving={arriving} />
           {s.it === null && (
             <span className="seat" aria-hidden="true" style={{ '--r': `${layout.seatR}px`, transform: `translate(${layout.seat.x}px, ${layout.seat.y}px)` } as CSSProperties} />
           )}
@@ -833,7 +863,8 @@ export function Figures({ snap, flash }: { snap: GameSnapshot; flash: RoundClose
   const o = outcomesFor(balance, live.cost, config.cutPpm);
   const open = !s.saved && s.roundSupply > 0n;
   const charged = open && s.armed;
-  const shownBalance = useTweened(balance);
+  // A change of balance rolls to its new value in 400 ms, with the +/− chip fading in beside it.
+  const shownBalance = useTweened(balance, 400);
   const collected = useTweened(itAccount?.collected ?? 0n);
   const paid = flash?.kind === 'collapsed';
   // Nothing held, nothing to show: the figures are dashes until there is a balance.

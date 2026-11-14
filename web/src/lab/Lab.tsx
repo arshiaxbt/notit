@@ -4,6 +4,7 @@ import type { ForwardLookingResult, MixedCrowdResult, WhoPaysResult } from '@not
 import { XYChart } from '../components/charts/XYChart';
 import type { Tick } from '../components/charts/XYChart';
 import { Card, cls } from '../components/ui';
+import { prefersReducedMotion } from '../hooks/useReducedMotion';
 import { formatInt, formatToken } from '../lib/format';
 import { queryGet, querySet } from '../lib/url';
 import { PRESETS, SWEEP, classicFailure, equilibriumFailure } from './jobs';
@@ -23,6 +24,32 @@ function pct(x: number, digits = 1): string {
   const v = x * 100;
   if (v > 0 && v < 0.05) return '<0.1%';
   return `${v.toFixed(digits).replace(/\.0+$/, '')}%`;
+}
+
+/** A number that eases to its latest value over `ms` (at once under reduced motion). */
+function useEased(value: number, ms = 200): number {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    if (prefersReducedMotion() || from.current === value) {
+      from.current = value;
+      setShown(value);
+      return;
+    }
+    const start = from.current;
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms);
+      const next = start + (value - start) * (1 - (1 - p) ** 3);
+      from.current = next;
+      setShown(p >= 1 ? value : next);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms]);
+  return shown;
 }
 
 /** A difference between two shares, in percentage points. */
@@ -259,13 +286,16 @@ function Bystander() {
     return [1, r / 4, r / 2, (3 * r) / 4, r].map((v) => ({ v: Math.max(1, Math.round(v)), label: formatInt(Math.max(1, Math.round(v))) }));
   }, [path, trials]);
 
+  // The sentence's two figures tick to their new values instead of swapping.
+  const shownSimulated = useEased(picked?.simulated ?? 0);
+  const shownEquilibrium = useEased(picked?.equilibrium ?? 0);
   // One sentence: the number for the chosen crowd, next to what the equilibrium says.
   const reading: ReactNode = !picked ? (
     <p>Simulating…</p>
   ) : (
     <p>
-      With <b>{n}</b> holders nobody volunteered in <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds; the equilibrium says{' '}
-      {pct(picked.equilibrium)}.
+      With <b>{n}</b> holders nobody volunteered in <b>{pct(shownSimulated)}</b> of {formatInt(picked.trials)} rounds; the equilibrium says{' '}
+      {pct(shownEquilibrium)}.
     </p>
   );
 

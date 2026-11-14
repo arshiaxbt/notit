@@ -5,7 +5,7 @@
  * (focus the chart, then use the left and right arrow keys).
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { KeyboardEvent, PointerEvent, CSSProperties } from 'react';
 import { cls } from '../ui';
 
 export interface ChartSeries {
@@ -206,12 +206,13 @@ export function XYChart({
         ))}
 
         {pickX !== undefined && inDomain(pickX) && (
-          <g>
-            <line className="chart__cross" x1={px(pickX)} x2={px(pickX)} y1={M.top} y2={M.top + plotH} />
+          // Positioned with a transform, so the marker glides when the chosen value moves.
+          <g className="chart__pick" style={{ transform: `translateX(${px(pickX).toFixed(1)}px)` }}>
+            <line className="chart__cross" x1={0} x2={0} y1={M.top} y2={M.top + plotH} />
             {pickLabel && (
               <text
                 className="chart__note"
-                x={Math.min(width - M.right, Math.max(M.left, px(pickX)))}
+                x={Math.min(width - M.right, Math.max(M.left, px(pickX))) - px(pickX)}
                 y={M.top - 7}
                 textAnchor={px(pickX) > width - 70 ? 'end' : px(pickX) < M.left + 50 ? 'start' : 'middle'}
               >
@@ -224,15 +225,17 @@ export function XYChart({
         {series
           .filter((s) => s.kind !== 'dots' && s.points.length > 1)
           .map((s) => (
-            <path key={`l${s.id}`} className={cls('chart__line', s.dashed && 'chart__line--dashed')} d={pathOf(s.points)} />
+            // A solid curve draws on from the left when the chart first appears (pathLength makes its length 1).
+            <path key={`l${s.id}`} className={cls('chart__line', s.dashed ? 'chart__line--dashed' : 'chart__line--draw')} pathLength={s.dashed ? undefined : 1} d={pathOf(s.points)} />
           ))}
         {series
           .filter((s) => s.kind === 'dots')
           .map((s) =>
-            s.points.map((p) => (
+            s.points.map((p, k) => (
               <circle
                 key={`d${s.id}-${p.x}`}
                 className={cls('chart__dot', (p.x === pickX || p.x === activeX) && 'chart__dot--picked')}
+                style={{ '--k': k } as CSSProperties}
                 cx={px(p.x)}
                 cy={py(clampY(p.y))}
                 r={p.x === pickX || p.x === activeX ? 6.5 : 4.5}

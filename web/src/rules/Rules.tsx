@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { LockState } from '../client/session';
+import { prefersReducedMotion } from '../hooks/useReducedMotion';
 import type { ConfigView } from '../client/types';
 import type { Mode } from '../components/Header';
 import { Card } from '../components/ui';
@@ -31,7 +33,15 @@ function roundLength(ns: bigint): string {
   return formatCountdown(seconds * 1000);
 }
 
+/** The five rules have staggered in once in this page load. */
+let rulesShown = false;
+
 export function Rules({ config, mode, lock }: Props) {
+  // The rules stagger in the first time they are seen, and never again in this page load.
+  const [staggerOnce] = useState(() => !rulesShown && !prefersReducedMotion());
+  useEffect(() => {
+    rulesShown = true;
+  }, []);
   const unlocked = lock?.status === 'open';
   const c = config ?? FALLBACK;
   const max = formatPpm(c.maxCostPpm);
@@ -58,7 +68,7 @@ export function Rules({ config, mode, lock }: Props) {
         </h1>
       </header>
 
-      <ol className="rules">
+      <ol className={staggerOnce ? 'rules rules--arriving' : 'rules'}>
         <li className="rule">
           <h2>
             Time is split into rounds of {roundLength(c.roundNs)}

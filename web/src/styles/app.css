@@ -1784,3 +1784,32 @@
 .legend__scope {
   color: var(--muted);
 }
+
+/* ---- the lab's charts: the curve draws on, the simulated points arrive in order, the marker glides ---- */
+.chart__line--draw {
+  stroke-dasharray: 1;
+  animation: line-draw 0.5s ease-out both;
+}
+@keyframes line-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.chart__dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dot-in 0.18s ease-out both;
+  animation-delay: calc(var(--k, 0) * 20ms);
+}
+@keyframes dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+.chart__pick {
+  transition: transform 0.18s ease-out;
+}
