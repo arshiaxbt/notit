@@ -195,6 +195,12 @@ export interface FunctionCall {
 export interface ChainSigner {
   readonly accountId: string;
   readonly kind: 'guest' | 'wallet';
+  /**
+   * What the key held in this browser may do: anything ('full'), or only
+   * call `volunteer` and `poke` on the game contracts ('volunteer').
+   * Unset for wallets, which hold their own keys.
+   */
+  readonly key?: 'full' | 'volunteer';
   call(call: FunctionCall): Promise<TxOutcome>;
 }
 

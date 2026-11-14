@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { HistoryEntry } from '../../client/types';
 import type { GameSnapshot } from '../../hooks/useGame';
 import { formatCountdown, formatInt, formatToken, shortAccount } from '../../lib/format';
 import { Card, Who, cls } from '../ui';
+import { LiveContext } from './Scene';
 
 function amount(v: bigint): string {
   return formatToken(v, { maxFrac: 2, fixed: true });
@@ -28,6 +29,12 @@ export function lastRounds(history: HistoryEntry[], currentRound: number, count:
     cells.push(byRound.get(r) ?? { round: r, kind: 'dormant' });
   }
   return cells;
+}
+
+/** "Round N", from the same tick as the clock: when the clock rolls into the next round, so does this. */
+function RoundLabel({ round }: { round: number }) {
+  const live = useContext(LiveContext);
+  return <>Round {formatInt(live && live.round > 0 ? Math.max(round, live.round) : round)}</>;
 }
 
 export function RoundStrip({ snap }: { snap: GameSnapshot }) {
@@ -64,7 +71,7 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
     <Card
       labelId="strip-title"
       className="strip"
-      title={`Round ${formatInt(s.round)}`}
+      title={<RoundLabel round={s.round} />}
       aside={
         <ul className="legend" aria-label="Legend">
           <li>
@@ -129,7 +136,7 @@ export function HeroWall({ snap }: { snap: GameSnapshot }) {
             <thead>
               <tr>
                 <th scope="col">
-                  <span className="sr-only">Hero</span>
+                  <span className="sr-only">Volunteer</span>
                 </th>
                 <th scope="col" className="num">
                   Saves
@@ -138,7 +145,7 @@ export function HeroWall({ snap }: { snap: GameSnapshot }) {
                   Burned
                 </th>
                 <th scope="col" className="num">
-                  Collected
+                  Paid to It
                 </th>
               </tr>
             </thead>

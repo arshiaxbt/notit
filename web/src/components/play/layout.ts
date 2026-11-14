@@ -39,6 +39,8 @@ export interface SceneLayout {
   /** Holders that get a face, and those folded into "+N". */
   shown: number;
   extra: number;
+  /** Sideways layout: where the button sits (centre x, top y, width). Null when it is under your face as usual. */
+  dock: { x: number; y: number; w: number } | null;
 }
 
 export const MAX_FACES = 24;
@@ -59,6 +61,11 @@ export interface Room {
   pitchH?: number;
   dockH?: number;
   lineH?: number;
+  /**
+   * A short, wide stage is laid out sideways: the ring and the clock on the left, your
+   * face with the button and its line on the right, so everything stays in view.
+   */
+  side?: boolean;
 }
 /** Below this many faces the ring is drawn tighter, so it still reads as a ring. */
 export const SPARSE_BELOW = 10;
@@ -113,7 +120,66 @@ export const LINE_H_COMPACT = 34;
 const CLOCK_MIN = 72;
 const CLOCK_SMALL = 62;
 
+/** The sideways layout for a short, wide stage. */
+function fitSide(box: Box, holders: number, maxFace: number, room: Room): SceneLayout {
+  const shown = Math.max(0, Math.min(holders, MAX_FACES));
+  const extra = Math.max(0, holders - shown);
+  const n = shown + (extra > 0 ? 1 : 0);
+  const pitchH = room.pitchH ?? PITCH_H;
+  const lineH = room.lineH ?? 28;
+  const split = Math.round(box.w * 0.54);
+  const cx = split / 2;
+  let faceR = maxFace;
+  let rx = 1;
+  let ry = 1;
+  let cy = box.h / 2;
+  let points: Point[] = [];
+  for (let pass = 0; pass < 5; pass++) {
+    const top = pitchH + faceR + 2;
+    const bottom = box.h - faceR - 6;
+    cy = (top + bottom) / 2;
+    ry = Math.max(40, (bottom - top) / 2);
+    rx = Math.max(40, Math.min(split / 2 - 10 - faceR, ry * 1.9));
+    points = pointsOnArc({ x: cx, y: cy }, rx, ry, 0, 2 * Math.PI, n, true);
+    let spacing = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      for (let k = i + 1; k < points.length; k++) spacing = Math.min(spacing, Math.hypot(points[i]!.x - points[k]!.x, points[i]!.y - points[k]!.y));
+    }
+    const next = clamp(Math.floor(spacing / 2 - 3), 9, maxFace);
+    if (next === faceR) break;
+    faceR = next;
+  }
+  const youR = faceR * YOU_SCALE;
+  // The clock and its line stay clear of the faces above and below them.
+  const lowest = Math.min(ry, ...points.filter((p) => Math.abs(p.x - cx) < 76 + faceR && p.y > cy).map((p) => p.y - cy)) - faceR - 2;
+  const clockR = Math.max(30, Math.min(ry - faceR - 6, rx - faceR - 10, lowest - lineH, 90));
+  const seatR = Math.min(faceR, clockR * 0.27);
+  const colX = split + (box.w - split) / 2;
+  const dockW = Math.min(340, box.w - split - 28);
+  const you = { x: colX, y: pitchH + youR + 4 };
+  return {
+    compact: false,
+    center: { x: cx, y: cy },
+    rx,
+    ry,
+    clockR,
+    seat: { x: cx, y: cy + clockR * 0.42 },
+    seatR,
+    // The line here is the short form of the name (see Scene), about 150 px at most.
+    lineW: 150,
+    you,
+    youR,
+    faceR,
+    slots: points.slice(0, shown),
+    more: extra > 0 ? (points[shown] ?? null) : null,
+    shown,
+    extra,
+    dock: { x: colX, y: you.y + youR + 10, w: dockW },
+  };
+}
+
 function fit(box: Box, holders: number, maxFace: number, room: Room): SceneLayout {
+  if (room.side) return fitSide(box, holders, maxFace, room);
   const compact = box.w < COMPACT_BELOW;
   const cap = compact ? MAX_FACES_COMPACT : MAX_FACES;
   const shown = Math.max(0, Math.min(holders, cap));
@@ -194,11 +260,13 @@ function fit(box: Box, holders: number, maxFace: number, room: Room): SceneLayou
     more: extra > 0 ? (points[shown] ?? null) : null,
     shown,
     extra,
+    dock: null,
   };
 }
 
 /** `holders` is the number of faces on the ring: everyone but you and whoever sits in the middle. */
 export function sceneLayout(box: Box, holders: number, room: Room = {}): SceneLayout {
+  if (room.side) return fitSide(box, holders, 16, room);
   const compact = box.w < COMPACT_BELOW;
   const sparse = Math.min(holders, compact ? MAX_FACES_COMPACT + 1 : MAX_FACES) < SPARSE_BELOW;
   let maxFace = compact ? (sparse ? 24 : 20) : sparse ? 32 : 30;

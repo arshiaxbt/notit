@@ -122,6 +122,32 @@ describe('ring layout', () => {
     expect(phone.ry).toBeLessThan(sceneLayout(sceneBoxFor(390, 844), 12).ry);
   });
 
+  it('lays a short, wide stage out sideways: ring and clock on the left, you and the button on the right', () => {
+    for (const [w, h] of [[844, 277], [640, 273], [932, 300]] as const) {
+      for (const count of [0, 3, 7, 16, 24]) {
+        const l = sceneLayout({ w, h }, count, { pitchH: 34, side: true });
+        expect(l.dock).not.toBeNull();
+        const all = [...l.slots.map((p) => ({ ...p, r: l.faceR })), { ...l.you, r: l.youR }];
+        for (let i = 0; i < all.length; i++) {
+          for (let k = i + 1; k < all.length; k++) expect(Math.hypot(all[i]!.x - all[k]!.x, all[i]!.y - all[k]!.y)).toBeGreaterThanOrEqual(all[i]!.r + all[k]!.r);
+          expect(all[i]!.x - all[i]!.r).toBeGreaterThanOrEqual(0);
+          expect(all[i]!.x + all[i]!.r).toBeLessThanOrEqual(w);
+          expect(all[i]!.y - all[i]!.r).toBeGreaterThanOrEqual(34);
+          expect(all[i]!.y + all[i]!.r).toBeLessThanOrEqual(h);
+        }
+        // The ring keeps to the left half; your face, and the button under it, to the right.
+        for (const p of l.slots) expect(p.x + l.faceR).toBeLessThan(l.you.x - l.youR);
+        expect(l.dock!.x - l.dock!.w / 2).toBeGreaterThan(l.center.x + l.rx);
+        expect(l.dock!.x + l.dock!.w / 2).toBeLessThanOrEqual(w);
+        // Button (46) and two lines under it (44) fit below your face.
+        expect(l.dock!.y + 46 + 44).toBeLessThanOrEqual(h);
+        // The clock sits inside the ring with room for its line.
+        expect(l.clockR).toBeGreaterThanOrEqual(30);
+        for (const p of l.slots) expect(Math.hypot(p.x - l.center.x, p.y - l.center.y)).toBeGreaterThanOrEqual(l.clockR + l.faceR);
+      }
+    }
+  });
+
   it('keeps people in their places when the crowd changes', () => {
     expect(stableOrder([], ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
     // b leaves, d arrives: d takes b's place, a and c stay put.

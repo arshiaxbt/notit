@@ -56,7 +56,8 @@ export function App() {
   const chain: ChainUi | null = onTestnet ? { session, state: sessionState } : null;
 
   const client: GameClient = chain ? chain.session.client : demo;
-  const game = useGame(client);
+  // Within one mode (Fast to Live) the last picture stays up until the new contract answers.
+  const game = useGame(client, { holdKey: mode });
   const { refresh } = game;
 
   useEffect(() => {

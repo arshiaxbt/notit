@@ -560,23 +560,35 @@
     height: max(250px, calc(100svh - var(--chrome-h, 113px)));
   }
 }
-.stage--short .stage__pitch,
-.stage--short .stage__under {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+.stage--side .stage__pitch {
+  top: 8px;
+  font-size: var(--text-s);
   white-space: nowrap;
 }
-.stage--short .dock {
-  top: calc(100% - 58px);
+.stage--side .stage__line {
+  font-size: var(--text-s);
 }
-.stage--short .act {
+.stage--side .dock {
+  left: var(--dock-x);
+  top: var(--dock-y);
+  width: var(--dock-w);
+  /* centred on --dock-x by the same translateX(-50%) the button always has */
+}
+.stage--side .act {
   min-height: 46px;
 }
-.stage--short .act__note {
+.stage--side .act__note {
+  width: auto;
   min-height: 0;
+  margin-left: 0;
+  translate: none;
+}
+
+/* the links under the button are 44 px tall where a finger lands */
+@media (max-width: 760px), (pointer: coarse) {
+  .act__link {
+    padding-block: 13px;
+  }
 }
 
 /* ---- phone: a tall oval, the button pinned to the bottom of the viewport ---- */

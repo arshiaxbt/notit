@@ -14,6 +14,7 @@ const ERROR_TEXT: Record<string, string> = {
   ERR_NO_ACCOUNT: 'Sign in first: play as a guest or connect a wallet.',
   ERR_REJECTED: 'Cancelled in the wallet. Nothing was sent.',
   ERR_NETWORK: 'The network did not answer. Nothing was changed. Try again.',
+  ERR_KEY_LIMITED: 'This browser key can only volunteer.',
   ERR_NO_GAS: 'This account has run out of testnet NEAR to pay for transactions.',
 };
 

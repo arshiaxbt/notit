@@ -114,6 +114,7 @@ export function Rules({ config, mode, lock }: Props) {
             <li>Testnet only: test tokens, no value.</li>
             <li>The faucet can be farmed with many accounts.</li>
             <li>A volunteer sent in the last seconds can land too late.</li>
+            <li>A guest's browser key can only volunteer.</li>
           </ul>
         </Card>
       </div>

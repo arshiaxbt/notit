@@ -117,8 +117,18 @@ export async function loadChainProvider(rpcUrls: string[]): Promise<ChainProvide
 
 export interface GuestCredentials {
   accountId: string;
-  /** "ed25519:…". Lives only in this browser's localStorage. */
-  secretKey: string;
+  /**
+   * The account's full-access key, "ed25519:…". Present until the key swap is confirmed
+   * (and for guests made before session keys existed). Lives only in this browser's localStorage.
+   */
+  secretKey?: string;
+  /**
+   * Function-call keys by contract id: each can only call `volunteer` and `poke` on its contract.
+   * Stored before the swap is sent, so a reload in the middle cannot lose them.
+   */
+  keys?: Record<string, string>;
+  /** 'pending' while a new guest still has claims to make or its key to lock; absent otherwise. */
+  setup?: 'pending';
 }
 
 function storageKey(network: string): string {
@@ -130,7 +140,11 @@ export function loadGuest(network: string): GuestCredentials | null {
     const raw = localStorage.getItem(storageKey(network));
     if (!raw) return null;
     const v = JSON.parse(raw) as Partial<GuestCredentials>;
-    if (typeof v.accountId === 'string' && typeof v.secretKey === 'string') return { accountId: v.accountId, secretKey: v.secretKey };
+    if (typeof v.accountId !== 'string') return null;
+    const keys = v.keys && typeof v.keys === 'object' && Object.values(v.keys).every((k) => typeof k === 'string') ? v.keys : undefined;
+    const secretKey = typeof v.secretKey === 'string' ? v.secretKey : undefined;
+    if (!secretKey && !(keys && Object.keys(keys).length > 0)) return null;
+    return { accountId: v.accountId, secretKey, keys, setup: v.setup === 'pending' ? 'pending' : undefined };
   } catch {
     /* blocked or corrupt storage: treat as no guest */
   }
@@ -233,32 +247,152 @@ export async function waitForAccount(config: ChainConfig, accountId: string, tim
   return false;
 }
 
-/** A signer backed by a guest key held in this browser. */
+/** The only methods a locked guest key may call, on the game contracts and nowhere else. */
+export const SESSION_METHODS = ['volunteer', 'poke'];
+/** Gas allowance of each function-call key, in NEAR. Enough for thousands of volunteers. */
+export const SESSION_ALLOWANCE_NEAR = '0.25';
+
+/** One access key of an account, as the chain reports it. */
+export interface KeyInfo {
+  publicKey: string;
+  permission: 'full' | { receiver: string; methods: string[] };
+}
+
+/** What a locked guest must hold: exactly one function-call key per game contract and no full-access key. */
+export function isLockedTo(keys: KeyInfo[], want: Record<string, string>, methods: string[] = SESSION_METHODS): boolean {
+  const contracts = Object.keys(want);
+  if (keys.length !== contracts.length) return false;
+  return contracts.every((contractId) => {
+    const k = keys.find((x) => x.publicKey === want[contractId]);
+    if (!k || k.permission === 'full') return false;
+    return k.permission.receiver === contractId && [...k.permission.methods].sort().join() === [...methods].sort().join();
+  });
+}
+
+/**
+ * The chain-facing steps of a guest's life, as one seam: the session drives
+ * them and the tests replace them. Nothing here keeps state.
+ */
+export interface GuestChain {
+  createAccount(config: ChainConfig): Promise<GuestCredentials>;
+  waitForAccount(config: ChainConfig, accountId: string): Promise<boolean>;
+  signer(config: ChainConfig, guest: GuestCredentials): Promise<ChainSigner>;
+  /** A fresh key pair per contract: secret keys to store, public keys to add. */
+  newKeys(contractIds: string[]): Promise<{ secret: Record<string, string>; public: Record<string, string> }>;
+  publicKeys(secret: Record<string, string>): Promise<Record<string, string>>;
+  /** One transaction signed by the full key: add the function-call keys, delete the full key. */
+  swapKeys(config: ChainConfig, guest: GuestCredentials, publicKeys: Record<string, string>): Promise<{ txHash?: string }>;
+  accessKeys(config: ChainConfig, accountId: string): Promise<KeyInfo[]>;
+}
+
+type KeyString = Parameters<NearApi['KeyPair']['fromString']>[0];
+
+async function sendCall(api: NearApi, account: InstanceType<NearApi['Account']>, call: FunctionCall): Promise<TxOutcome> {
+  try {
+    const raw = await account.callFunctionRaw({
+      contractId: call.contractId,
+      methodName: call.method,
+      args: call.args,
+      gas: api.teraToGas(call.gasTera),
+      deposit: call.deposit,
+    });
+    return outcomeToTx(raw);
+  } catch (e) {
+    if (e instanceof TxFailure) throw e;
+    // near-api-js throws e.g. HostGuestPanicError("Contract panicked: ERR_ALREADY_SAVED")
+    // with the outcome attached. Keep the message (it carries the code) and the hash.
+    const text = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    const panic = (e as { panicMessage?: unknown } | null)?.panicMessage;
+    throw new TxFailure(typeof panic === 'string' ? `${text} (${panic})` : text, errorTxHash(e));
+  }
+}
+
+/**
+ * A signer backed by the guest keys held in this browser: the full-access key
+ * while there is one, otherwise the function-call key of the contract called.
+ */
 export async function guestSigner(config: ChainConfig, guest: GuestCredentials): Promise<ChainSigner> {
   const api = await loadNearApi();
   const provider = await loadProvider(config.rpcUrls);
-  const account = new api.Account(guest.accountId, provider, guest.secretKey as Parameters<NearApi['KeyPair']['fromString']>[0]);
+  if (guest.secretKey) {
+    const account = new api.Account(guest.accountId, provider, guest.secretKey as KeyString);
+    return { accountId: guest.accountId, kind: 'guest', key: 'full', call: (call) => sendCall(api, account, call) };
+  }
+  const accounts = new Map<string, InstanceType<NearApi['Account']>>();
+  for (const [contractId, secret] of Object.entries(guest.keys ?? {})) accounts.set(contractId, new api.Account(guest.accountId, provider, secret as KeyString));
   return {
     accountId: guest.accountId,
     kind: 'guest',
+    key: 'volunteer',
     async call(call: FunctionCall): Promise<TxOutcome> {
-      try {
-        const raw = await account.callFunctionRaw({
-          contractId: call.contractId,
-          methodName: call.method,
-          args: call.args,
-          gas: api.teraToGas(call.gasTera),
-          deposit: call.deposit,
-        });
-        return outcomeToTx(raw);
-      } catch (e) {
-        if (e instanceof TxFailure) throw e;
-        // near-api-js throws e.g. HostGuestPanicError("Contract panicked: ERR_ALREADY_SAVED")
-        // with the outcome attached. Keep the message (it carries the code) and the hash.
-        const text = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-        const panic = (e as { panicMessage?: unknown } | null)?.panicMessage;
-        throw new TxFailure(typeof panic === 'string' ? `${text} (${panic})` : text, errorTxHash(e));
-      }
+      const account = accounts.get(call.contractId);
+      // A function-call key cannot attach a deposit or call another method: say so instead of sending a doomed transaction.
+      if (!account || call.deposit > 0n || !SESSION_METHODS.includes(call.method)) throw new TxFailure('ERR_KEY_LIMITED');
+      return sendCall(api, account, call);
     },
   };
 }
+
+function keyInfo(raw: unknown): KeyInfo | null {
+  const k = raw as { public_key?: unknown; access_key?: { permission?: unknown } } | null;
+  if (!k || typeof k.public_key !== 'string') return null;
+  const perm = k.access_key?.permission;
+  if (perm === 'FullAccess') return { publicKey: k.public_key, permission: 'full' };
+  const fc = (perm as { FunctionCall?: { receiver_id?: unknown; method_names?: unknown } } | null)?.FunctionCall;
+  if (fc && typeof fc.receiver_id === 'string' && Array.isArray(fc.method_names)) {
+    return { publicKey: k.public_key, permission: { receiver: fc.receiver_id, methods: fc.method_names.map(String) } };
+  }
+  // Something this app does not know (a gas key, say): treat it as full access, the cautious reading.
+  return { publicKey: k.public_key, permission: 'full' };
+}
+
+/**
+ * The key swap, as one list of actions for one transaction: a function-call key
+ * per contract, then, last, the deletion of the full-access key that signs it.
+ */
+export function swapActions(api: NearApi, publicKeys: Record<string, string>, fullPublicKey: string, allowance: bigint) {
+  return [
+    ...Object.entries(publicKeys).map(([contractId, pk]) => api.actions.addFunctionCallAccessKey(api.PublicKey.fromString(pk), contractId, SESSION_METHODS, allowance)),
+    api.actions.deleteKey(api.PublicKey.fromString(fullPublicKey)),
+  ];
+}
+
+/** The real chain, through near-api-js. */
+export const guestChain: GuestChain = {
+  createAccount: (config) => createGuestAccount(config),
+  waitForAccount: (config, accountId) => waitForAccount(config, accountId),
+  signer: (config, guest) => guestSigner(config, guest),
+  async newKeys(contractIds) {
+    const api = await loadNearApi();
+    const secret: Record<string, string> = {};
+    const pub: Record<string, string> = {};
+    for (const id of contractIds) {
+      const pair = api.KeyPair.fromRandom('ed25519');
+      secret[id] = pair.toString();
+      pub[id] = pair.getPublicKey().toString();
+    }
+    return { secret, public: pub };
+  },
+  async publicKeys(secret) {
+    const api = await loadNearApi();
+    return Object.fromEntries(Object.entries(secret).map(([id, k]) => [id, api.KeyPair.fromString(k as KeyString).getPublicKey().toString()]));
+  },
+  async swapKeys(config, guest, publicKeys) {
+    if (!guest.secretKey) throw new Error('The full-access key is needed to swap keys.');
+    const api = await loadNearApi();
+    const provider = await loadProvider(config.rpcUrls);
+    const full = api.KeyPair.fromString(guest.secretKey as KeyString);
+    const account = new api.Account(guest.accountId, provider, guest.secretKey as KeyString);
+    const allowance = api.nearToYocto(SESSION_ALLOWANCE_NEAR);
+    const out = await account.signAndSendTransaction({
+      receiverId: guest.accountId,
+      actions: swapActions(api, publicKeys, full.getPublicKey().toString(), allowance),
+    });
+    return { txHash: outcomeToTx(out).txHash };
+  },
+  async accessKeys(config, accountId) {
+    const provider = await loadProvider(config.rpcUrls);
+    const list = await provider.viewAccessKeyList({ accountId });
+    return (Array.isArray(list.keys) ? list.keys : []).map(keyInfo).filter((k): k is KeyInfo => k !== null);
+  },
+};

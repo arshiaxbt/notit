@@ -118,18 +118,23 @@ export function formatShare(part: bigint, whole: bigint, frac = 2): string {
 export const NAME_MAX = 20;
 /** The length used on a phone. */
 export const NAME_MAX_COMPACT = 16;
+/** Under the clock on a phone there is little room: the name alone, without ".testnet", at this length. */
+export const NAME_MAX_LINE_COMPACT = 12;
 
-export function shortAccount(id: string, max = NAME_MAX): string {
-  if (id.length <= max) return id;
+export function shortAccount(id: string, max = NAME_MAX, keepSuffix = true): string {
   const dot = id.lastIndexOf('.');
   const suffix = dot > 0 && id.length - dot <= 9 ? id.slice(dot) : '';
   const stem = suffix ? id.slice(0, dot) : id;
-  // Room for at least "abc…wxyz" beside the suffix; otherwise the suffix is dropped.
-  if (suffix && max - suffix.length - 1 >= 6) {
-    const keep = max - suffix.length - 1;
-    const tail = Math.ceil(keep * 0.5);
-    return `${stem.slice(0, keep - tail)}…${stem.slice(-tail)}${suffix}`;
+  if (keepSuffix) {
+    if (id.length <= max) return id;
+    // Room for at least "abc…wxyz" beside the suffix; otherwise the suffix is dropped.
+    if (suffix && max - suffix.length - 1 >= 6) {
+      const keep = max - suffix.length - 1;
+      const tail = Math.ceil(keep * 0.5);
+      return `${stem.slice(0, keep - tail)}…${stem.slice(-tail)}${suffix}`;
+    }
   }
+  // Without the suffix, always: one shape for every name in that place.
   if (stem.length <= max) return stem;
   const keep = Math.max(4, max - 1);
   const tail = Math.max(3, Math.ceil(keep * 0.6));

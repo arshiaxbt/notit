@@ -3,6 +3,7 @@ import type { KeyboardEvent } from 'react';
 import type { ChainUi } from '../hooks/useSession';
 import type { Theme } from '../hooks/useTheme';
 import { shortAccount } from '../lib/format';
+import { KeyMark } from './play/Chain';
 import { useNameMax } from './ui';
 
 export type Tab = 'play' | 'lab' | 'rules';
@@ -102,6 +103,7 @@ export function Header({ tab, onTab, mode, onMode, testnetAvailable, network, ch
               <span className="acct__kind">{account.kind === 'guest' ? 'Guest' : 'Wallet'}</span>
               {shortAccount(account.id, nameMax)}
             </span>
+            {account.kind === 'guest' && account.key && <KeyMark chain={chain} account={account} />}
             <button type="button" className="acct__out" onClick={() => void chain.session.signOut()}>
               Sign out
             </button>

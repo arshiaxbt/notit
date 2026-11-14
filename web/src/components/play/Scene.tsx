@@ -14,7 +14,7 @@ import { useLive } from '../../hooks/useLive';
 import type { Live } from '../../hooks/useLive';
 import type { ChainUi } from '../../hooks/useSession';
 import { itCollects, maxCostFor, outcomesFor } from '../../lib/cost';
-import { NAME_MAX, NAME_MAX_COMPACT, formatCountdown, formatPpm, formatShare, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
+import { NAME_MAX, NAME_MAX_COMPACT, NAME_MAX_LINE_COMPACT, formatCountdown, formatPpm, formatShare, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
 import { Digits, Who, cls, useTweened } from '../ui';
 import { TxLink } from './Chain';
 import { COMPACT_BELOW, SHORT_BELOW, sceneLayout, stableOrder } from './layout';
@@ -190,7 +190,7 @@ function useGlances(stage: React.RefObject<HTMLElement | null>, game: Game, roun
 
 /* -------------------------------------------------------------- one shared tick */
 
-const LiveContext = createContext<Live | null>(null);
+export const LiveContext = createContext<Live | null>(null);
 
 /**
  * The cost on the button and the figures under the stage come from the same
@@ -318,10 +318,9 @@ function spokenStatus(snap: GameSnapshot, live: Live, scale: number): string {
   if (s.saved && s.hero) return `Round ${s.round} is saved by ${nameOf(s.hero, me)}. ${left} until the next round. ${it}`;
   if (s.roundSupply === 0n) return `Round ${s.round}. Nothing to save yet. ${left} left.`;
   if (isAsleep(snap)) return `Round ${s.round}. The game is asleep: nothing is charged until someone volunteers. ${it}`;
-  return `Round ${s.round}. ${left} left. Nobody has stepped up. The cost is ${formatToken(live.cost, { maxFrac: 2 })} NOTIT. ${it}`;
+  return `Round ${s.round}. ${left} left. Nobody has volunteered. The cost is ${formatToken(live.cost, { maxFrac: 2 })} NOTIT. ${it}`;
 }
 
-const GUEST_STEPS = ['account', 'confirm', 'claim'] as const;
 
 /** Testnet with nobody signed in: one click to play as a guest, or a wallet. */
 function SignIn({ chain, claimAmount, onUseDemo }: { chain: ChainUi; claimAmount: bigint; onUseDemo(): void }) {
@@ -330,8 +329,17 @@ function SignIn({ chain, claimAmount, onUseDemo }: { chain: ChainUi; claimAmount
   const running = guest.status === 'running';
   const failed = guest.status === 'error';
   const stored = session.storedGuestId();
-  const step = guest.step ? GUEST_STEPS.indexOf(guest.step) : -1;
-  const stepText = ['Creating account', 'Waiting for the network', `Claiming ${formatToken(claimAmount)} NOTIT`][step] ?? 'Starting';
+  // The steps, said plainly: account, a claim per deployment, then the key is locked.
+  const stepText =
+    guest.step === 'account'
+      ? 'Creating account'
+      : guest.step === 'confirm'
+        ? 'Waiting for the network'
+        : guest.step === 'claim'
+          ? `Claiming ${formatToken(claimAmount)} NOTIT${guest.detail ? ` on ${guest.detail}` : ''}`
+          : guest.step === 'lock'
+            ? 'Locking the key'
+            : 'Starting';
 
   let label = 'Play as guest';
   if (restoring) label = 'Signing in…';
@@ -359,7 +367,7 @@ function SignIn({ chain, claimAmount, onUseDemo }: { chain: ChainUi; claimAmount
       <div className="act__note" role="status" aria-live="polite">
         {running ? (
           <span>
-            {step + 1 > 0 ? `${step + 1}/3 ` : ''}
+            {guest.at && guest.of ? `${guest.at}/${guest.of} ` : ''}
             {stepText}
           </span>
         ) : failed && guest.error ? (
@@ -389,17 +397,15 @@ function Act({ game, snap, chain, flash, scale, onUseDemo }: { game: Game; snap:
   const { state: s, config, accountId: me } = snap;
   const act = actFor(snap, live, game.pending, scale);
 
-  // Screen readers: one polite sentence when the round or its state changes,
-  // and otherwise at most every ten seconds.
+  // Screen readers: one polite sentence when the round or its state changes, and not in between
+  // (a line announced on a timer is out of date by the time it is read).
   const [spoken, setSpoken] = useState('');
   const latest = useRef({ snap, live, scale });
   latest.current = { snap, live, scale };
+  const asleepNow = isAsleep(snap);
   useEffect(() => {
-    const say = () => setSpoken(spokenStatus(latest.current.snap, latest.current.live, latest.current.scale));
-    say();
-    const t = window.setInterval(say, 10_000);
-    return () => window.clearInterval(t);
-  }, [s.round, s.saved, s.it]);
+    setSpoken(spokenStatus(latest.current.snap, latest.current.live, latest.current.scale));
+  }, [s.round, s.saved, s.it, asleepNow, scale]);
 
   const guestStatus = chain?.state.guest.status;
   const signUp = chain !== null && (!me || guestStatus === 'running' || guestStatus === 'error');
@@ -457,7 +463,7 @@ function Act({ game, snap, chain, flash, scale, onUseDemo }: { game: Game; snap:
           <button
             type="button"
             className={cls('act', pending && 'act--pending')}
-            disabled={act.disabled || live.rolled}
+            disabled={act.disabled || live.rolled || game.stale}
             aria-busy={pending || undefined}
             aria-label={shownCost && act.action === 'volunteer' && !pending ? `${act.label}: burn ${shownCost} NOTIT` : undefined}
             onClick={onAct}
@@ -556,7 +562,7 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
     return () => ro.disconnect();
   }, [ref, short]);
   const layout = useMemo(
-    () => (box.w > 0 && box.h > 0 ? sceneLayout(box, ring.length, { ...(room ?? {}), lineH: short ? 4 : undefined }) : null),
+    () => (box.w > 0 && box.h > 0 ? sceneLayout(box, ring.length, short ? { pitchH: room?.pitchH, side: true } : (room ?? {})) : null),
     [box, ring.length, room, short],
   );
   // Every face on the ring looks straight away from the centre.
@@ -632,7 +638,7 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
     const youLabel = youAreIt ? 'You · It' : 'You';
     placed.push({ id: 'you', at: youAt, label: youLabel });
     els.push(
-      <Face key="you" id="you" at={youAt} r={youAreIt ? layout.seatR : layout.youR} gaze={youAreIt ? STRAIGHT : AT_THE_CLOCK} out={youAreIt ? STRAIGHT : DOWN} index={ring.length} it={youAreIt} you label={youLabel} tab={first} onTip={onTip} />,
+      <Face key="you" id="you" at={youAt} r={youAreIt ? layout.seatR : layout.youR} gaze={youAreIt ? STRAIGHT : layout.dock ? away(layout.you, layout.center) : AT_THE_CLOCK} out={youAreIt ? STRAIGHT : DOWN} index={ring.length} it={youAreIt} you label={youLabel} tab={first} onTip={onTip} />,
     );
     faces = els;
 
@@ -673,8 +679,9 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
 
   // One short line under the clock, never wider than the space between the faces beside it:
   // the name is cut to what fits (the whole name is in its title and in the tooltip).
+  // On a phone the name stands without its ".testnet", at one length; elsewhere it is the usual shortening.
   const lineW = layout?.lineW ?? 320;
-  const fits = (words: number, perChar: number) => Math.max(5, Math.min(20, Math.floor(lineW / perChar) - words));
+  const lineName = layout?.compact || layout?.dock ? { max: NAME_MAX_LINE_COMPACT, keepSuffix: false } : { max: NAME_MAX, keepSuffix: true };
   let line: ReactNode;
   const savedByYou = s.saved && s.hero !== null && s.hero === me;
   if (s.roundSupply === 0n) line = 'no tokens yet';
@@ -682,14 +689,14 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
   else if (s.saved && s.hero) {
     line = (
       <>
-        saved by <Who id={s.hero} me={me} max={fits(9, layout?.compact ? 9.4 : 10.8)} />
+        saved by <Who id={s.hero} me={me} {...lineName} />
       </>
     );
   } else if (asleep) line = 'asleep';
   else if (s.it) {
     line = (
       <>
-        <Who id={s.it} me={me} max={fits(6, 8.8)} /> {youAreIt ? 'are' : 'is'} It
+        <Who id={s.it} me={me} {...lineName} /> {youAreIt ? 'are' : 'is'} It
       </>
     );
   } else line = 'nobody is It';
@@ -704,10 +711,12 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
         flash?.kind === 'collapsed' && 'stage--paid',
         watching && 'stage--watch',
         arriving && 'stage--arriving',
-        short && 'stage--short',
+        short && 'stage--side',
         layout?.compact && 'stage--compact',
       )}
       aria-label="The game"
+      aria-busy={game.stale || undefined}
+      style={layout?.dock ? ({ '--dock-x': `${layout.dock.x}px`, '--dock-y': `${layout.dock.y}px`, '--dock-w': `${layout.dock.w}px` } as CSSProperties) : undefined}
     >
       <h1 className="stage__pitch" ref={pitchRef}>
         Somebody has to do it. If nobody does, everybody pays the last person who did.
@@ -730,7 +739,10 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
           <div className="coins" aria-hidden="true">
             {coins}
           </div>
-          <div className="stage__under" style={{ top: layout.center.y + layout.clockR + (layout.compact ? 8 : 12), '--line-w': `${Math.round(lineW)}px` } as CSSProperties}>
+          <div
+            className="stage__under"
+            style={{ top: layout.center.y + layout.clockR + (layout.dock ? 4 : layout.compact ? 8 : 12), left: layout.center.x - box.w / 2, right: box.w / 2 - layout.center.x, '--line-w': `${Math.round(lineW)}px` } as CSSProperties}
+          >
             {savedByYou ? (
               <span className="stamp" key={s.round}>
                 You did it
@@ -858,7 +870,7 @@ export function Figures({ snap, flash }: { snap: GameSnapshot; flash: RoundClose
     const gain = itAccount ? itCollects(s.totalSupply, itAccount.balance, config.cutPpm) : 0n;
     figs.push(
       paid
-        ? { key: 'it', label: 'It collected', value: <Digits text={amount(collected)} />, tone: 'up', title: `${shortAccount(s.it)} has collected this much as It` }
+        ? { key: 'it', label: 'Paid to It', value: <Digits text={amount(collected)} />, tone: 'up', title: `${shortAccount(s.it)} has collected this much as It` }
         : {
             key: 'it',
             label: 'It collects',

@@ -116,6 +116,21 @@ describe('percentages', () => {
 });
 
 describe('shortAccount', () => {
+  it('has one shape per place: with the suffix, or without it for every name', () => {
+    const ids = ['bea.demo', 'big-mo.demo', 'notit-undertaker-p460.testnet', 'guest-e2ff2ca8.testnet', 'alice.testnet'];
+    // Without the suffix none of them ends in one, however short the name.
+    for (const id of ids) {
+      const s12 = shortAccount(id, 12, false);
+      expect(s12).not.toMatch(/\.(demo|testnet)$/);
+      expect(s12.length).toBeLessThanOrEqual(12);
+    }
+    expect(shortAccount('bea.demo', 12, false)).toBe('bea');
+    expect(shortAccount('guest-e2ff2ca8.testnet', 12, false)).toBe('gues…2ff2ca8');
+    // With the suffix, a name that needs cutting keeps it.
+    expect(shortAccount('guest-e2ff2ca8.testnet', 16)).toBe('gue…2ca8.testnet');
+    expect(shortAccount('notit-undertaker-p460.testnet', 16)).toBe('not…p460.testnet');
+  });
+
   it('keeps two similar accounts apart at every length, down to the narrowest place', () => {
     const bots = ['notit-undertaker-p460.testnet', 'notit-freerider-p461.testnet', 'notit-freerider-p462.testnet', 'notit-sniper-p463.testnet'];
     const guests = ['guest-e2ff2ca8.testnet', 'guest-0df6d80f.testnet', 'guest-c32cda3f.testnet'];

@@ -78,6 +78,8 @@ export interface Game {
   snapshot: GameSnapshot | null;
   /** Set when polling fails; the last good snapshot stays on screen. */
   error: string | null;
+  /** True while the snapshot on screen belongs to the previous client and the new one has not answered yet. */
+  stale: boolean;
   lastClose: RoundClose | null;
   /** Action currently in flight. */
   pending: Action | null;
@@ -97,6 +99,12 @@ export interface Game {
 export interface UseGameOptions {
   /** Poll interval in ms. Defaults to the client's `pollMs`, else 1000. */
   pollMs?: number;
+  /**
+   * While this stays the same across a change of client (Fast to Live, say), the last
+   * picture stays on screen, marked stale, until the new client's first answer: never an
+   * empty frame. A different key (Demo to Testnet) starts from nothing.
+   */
+  holdKey?: string;
 }
 
 const HISTORY_WINDOW = 100;
@@ -180,6 +188,8 @@ export function useGame(client: GameClient, options: UseGameOptions = {}): Game 
   const pollMs = options.pollMs ?? client.pollMs ?? 1000;
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const heldKey = useRef<string | undefined>(options.holdKey);
   const [lastClose, setLastClose] = useState<RoundClose | null>(null);
   const [pending, setPending] = useState<Action | null>(null);
   const [notice, setNotice] = useState<{ id: number; text: string; gentle: boolean } | null>(null);
@@ -251,9 +261,15 @@ export function useGame(client: GameClient, options: UseGameOptions = {}): Game 
         }
         snapRef.current = next;
         setSnapshot(next);
+        setStale(false);
         setError(null);
       } catch (e) {
         if (clientRef.current !== forClient) return;
+        // Nothing of this client's to show: drop a picture held over from the last one.
+        if (snapRef.current === null) {
+          setSnapshot(null);
+          setStale(false);
+        }
         setError(e instanceof Error ? e.message : String(e));
       }
     })().finally(() => {
@@ -281,7 +297,13 @@ export function useGame(client: GameClient, options: UseGameOptions = {}): Game 
 
   // Reset on client change, then poll.
   useEffect(() => {
-    setSnapshot(null);
+    const hold = options.holdKey !== undefined && heldKey.current === options.holdKey;
+    heldKey.current = options.holdKey;
+    if (hold) setStale(true);
+    else {
+      setSnapshot(null);
+      setStale(false);
+    }
     setError(null);
     setLastClose(null);
     setNotice(null);
@@ -365,7 +387,7 @@ export function useGame(client: GameClient, options: UseGameOptions = {}): Game 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
   return useMemo(
-    () => ({ snapshot, error, lastClose, pending, notice, dismissNotice, lastTx, nowNs, refresh, claim, volunteer }),
-    [snapshot, error, lastClose, pending, notice, dismissNotice, lastTx, nowNs, refresh, claim, volunteer],
+    () => ({ snapshot, error, stale, lastClose, pending, notice, dismissNotice, lastTx, nowNs, refresh, claim, volunteer }),
+    [snapshot, error, stale, lastClose, pending, notice, dismissNotice, lastTx, nowNs, refresh, claim, volunteer],
   );
 }

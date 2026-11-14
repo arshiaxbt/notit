@@ -38,7 +38,7 @@ Not It is built so that every event is a real transfer of ownership. A save move
 - **Rules nobody can change.** A NEAR account with no access keys cannot be redeployed or administered. Both deployments were locked by deleting every key (`scripts/lock.sh`); step 4 below shows how to check.
 - **Standards.** NEP-141 token, NEP-145 storage management, NEP-148 metadata, NEP-297 events, so wallets and explorers read it without custom code.
 - **Cheap, fast finality.** A round is decided in its last seconds; one-second blocks and negligible fees make a three-minute round playable.
-- **One-click play.** The web app creates a faucet-funded testnet account in the browser, so a visitor can claim and volunteer without installing a wallet. Wallet login uses NEAR Connect.
+- **One-click play with a key that can only volunteer.** The web app creates a faucet-funded testnet account in the browser, claims, and then replaces the account's full-access key with function-call access keys limited to `volunteer` and `poke` on the two game contracts (one transaction: add two keys, delete the full one). `volunteer` takes no deposit precisely so that such a key can play. Wallet login uses NEAR Connect.
 - **Named accounts.** It, the volunteers and the bots are readable account names on the hero wall.
 - **NEAR Sandbox** runs the compiled contract in the integration test.
 
@@ -48,7 +48,7 @@ Not It is built so that every event is a real transfer of ownership. A save move
 | NEP-141, NEP-145, NEP-148 | The token, storage registration, metadata | `ft_metadata`, `ft_balance_of`, `storage_balance_bounds` on either contract |
 | NEP-297 events | Every claim, burn, save and collapse | Transaction logs on the explorer; Try it, step 6 |
 | NEP-330 source metadata | The contract reports this repository | Try it, step 4 |
-| Calls without a deposit | `volunteer` and `poke` take no deposit, so a function-call access key can play | `contract/src/lib.rs`, `volunteer` |
+| Function-call access keys | A guest's browser keeps only keys that can call `volunteer` and `poke` | Try it, step 5 (the `view_access_key_list` check) |
 | Faucet-funded accounts | One-click guest play in the web app | Try it, step 5 |
 | NEAR Connect | Wallet login in the web app | "Connect a wallet" in the app |
 | NEAR Sandbox | Integration test on the compiled contract | Try it, step 3 |
@@ -140,12 +140,22 @@ You should see `"link":"https://github.com/arshiaxbt/notit"`.
 
 Open https://arshiaxbt.github.io/notit/.
 
-1. The page opens in Testnet mode and shows the live round: countdown, falling cost, who is It.
-2. Press **Play as guest**. You should see a new testnet account created and 1,000 NOTIT in your balance within about ten seconds.
-3. Wait until the cost is something you are willing to burn and press **I'll do it**. You should see the round marked as saved by you, and your account shown as It.
-4. Do nothing for a round. If nobody else volunteers, you should see every other balance cut 15 % and your "collected" total rise.
+1. The page opens in Testnet mode on the live round. You should see the holders as faces on a ring, all looking away; a clock ring burning down in the middle; and It, the dark face inside it. The cost is on the button and falls every second.
+2. Press **Play as guest**. In about fifteen seconds you should see five steps go by (a new testnet account, a claim of 1,000 NOTIT on each deployment, "Locking the key"), then your balance and the words **key: volunteer only** by your account. From then on the key in your browser can only call `volunteer` and `poke` on the two game contracts. If the public faucet is busy, the page says so and offers the demo.
+3. Press **I'll do it**. You should see "Sending", then your face move to the middle of the ring: you are It.
+4. Do nothing for a round. If nobody else volunteers, you should see the ring flash red, a coin travel from every face to yours, and "paid to It" rise by 15 % of everyone else's balance.
 5. Switch to **Demo** in the header for the same game simulated in your browser on a fast clock, with no network.
-6. Open the **Lab** tab and move the crowd-size slider. You should see the failure rate rise with the crowd, next to the theory curve.
+6. Open the **Lab** tab and move the crowd-size slider. You should see the share of unsaved rounds rise with the crowd, next to the theory curve.
+
+To check a locked guest key without playing, read the keys of an account that went through this flow:
+
+```sh
+curl -s https://near-testnet.drpc.org -H 'content-type: application/json' -d '{
+  "jsonrpc":"2.0","id":1,"method":"query",
+  "params":{"request_type":"view_access_key_list","finality":"final","account_id":"fck-81433940.testnet"}}'
+```
+
+You should see exactly two keys, both `FunctionCall` with `method_names` `["volunteer","poke"]`, one for `notit-play.testnet` and one for `notit-live.testnet`, and no `FullAccess` key.
 
 ### 6. Play from the command line
 
@@ -188,7 +198,7 @@ Open the printed URL. You should see the same app.
 
 The contract pays for its own history records (see Limits). Anybody can send either account NEAR to extend that. The deployed WebAssembly is committed as [`contract/deployed/notit.wasm`](contract/deployed/notit.wasm): `sha256sum contract/deployed/notit.wasm` prints the hash above, and the `view_account` RPC query returns the same hash as `code_hash` for both accounts. A local rebuild can differ in a few bytes, because file paths and line numbers are part of the compiled code and the build is only bit-for-bit reproducible inside the cargo-near Docker image.
 
-A small fleet of bots (`bots/`) plays both deployments so that rounds are sometimes saved and sometimes not.
+A small fleet of bots (`bots/`) plays both deployments so that rounds are sometimes saved and sometimes not. The bots share one operator; when one of them ends up holding most of the fleet's tokens it sends some back to the others, so the demonstration does not stall (see `bots/README.md`).
 
 ## Repository layout
 
@@ -216,6 +226,7 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 
 - Testnet only; the tokens have no value. Nothing here is financial advice.
 - The faucet claim has no sybil resistance.
+- A guest account whose key has been locked can never do anything but volunteer: it cannot move its NEAR or tokens, or add a key. It is a throwaway testnet account by design.
 - Not audited. Known weaknesses are listed in [docs/MECHANISM.md](docs/MECHANISM.md#limits-and-known-weaknesses).
 - The lab simulates scripted strategies. It shows what the rules imply for those strategies, not how people behave.
 

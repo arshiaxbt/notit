@@ -33,6 +33,11 @@ export interface ChainConfig {
   contracts: Deployment[];
   /** Poll interval for views, ms. */
   pollMs: number;
+  /**
+   * New guests swap their full-access key for keys that can only volunteer.
+   * On unless switched off (VITE_SESSION_KEYS=off).
+   */
+  sessionKeys?: boolean;
 }
 
 const DEFAULT_RPC: Record<NetworkId, string[]> = {
@@ -68,6 +73,7 @@ export function readChainConfig(
     explorer: (clean(file.explorer) || `https://${network === 'mainnet' ? '' : 'testnet.'}nearblocks.io`).replace(/\/+$/, ''),
     contracts,
     pollMs: Number.isFinite(poll) && poll >= 500 ? poll : 3000,
+    sessionKeys: clean(env.VITE_SESSION_KEYS).toLowerCase() !== 'off',
   };
 }
 
@@ -79,4 +85,9 @@ export function txUrl(config: ChainConfig, hash: string): string {
 
 export function accountUrl(config: ChainConfig, accountId: string): string {
   return `${config.explorer}/address/${accountId}`;
+}
+
+/** The explorer's list of an account's access keys. */
+export function accessKeysUrl(config: ChainConfig, accountId: string): string {
+  return `${config.explorer}/address/${accountId}?tab=accesskeys`;
 }

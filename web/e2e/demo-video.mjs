@@ -160,13 +160,18 @@ async function record() {
 
   const browser = await chromium.launch();
   // The account is restored exactly as the app restores a returning guest: from localStorage.
-  const signIn = ({ accountId, secretKey }) => {
-    localStorage.setItem('notit-guest:testnet', JSON.stringify({ accountId, secretKey }));
-    localStorage.setItem('notit-signer', 'guest');
+  // A take: the account is put in storage as if the faucet had just made it, so the film shows the
+  // whole sign-up after that: a claim on each contract, then the key swapped for one that can only
+  // volunteer. A rehearsal: an account that has done all that is restored as a returning guest.
+  const signIn = ({ accountId, secretKey, fresh }) => {
+    if (!localStorage.getItem('notit-guest:testnet')) {
+      localStorage.setItem('notit-guest:testnet', JSON.stringify(fresh ? { accountId, secretKey, setup: 'pending' } : { accountId, secretKey }));
+      if (!fresh) localStorage.setItem('notit-signer', 'guest');
+    }
     localStorage.setItem('notit-theme', 'light');
   };
   const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, colorScheme: 'light' });
-  await context.addInitScript(signIn, guest);
+  await context.addInitScript(signIn, { ...guest, fresh: !REHEARSAL });
   const page = await context.newPage();
   const problems = [];
   // A public RPC endpoint that rate-limits answers without CORS headers; the app fails over
@@ -307,14 +312,15 @@ async function record() {
   try {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.stage .face', { timeout: 45_000 });
-    await page.waitForSelector('.acct__id', { timeout: 45_000 });
+    if (REHEARSAL) await page.waitForSelector('.acct__id', { timeout: 45_000 });
+    else await page.waitForFunction(() => /Continue as guest/.test(document.querySelector('.dock .act')?.textContent ?? ''), null, { timeout: 45_000 });
     await page.waitForFunction(() => !/Checking/.test(document.querySelector('.lock')?.textContent ?? ''), null, { timeout: 30_000 });
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(installOverlay, { zoom: ZOOM, speed: FAST, url: SITE, band: BAND });
     facts.contract = await text('.chainbar code');
     facts.locked = (await page.locator('.lock--locked').count()) > 0;
-    log(`signed in as ${await text('.acct__id')} on ${facts.contract}; locked: ${facts.locked}`);
-    const canClaim = /Claim/.test(await text('.dock .act'));
+    log(`${REHEARSAL ? `signed in as ${await text('.acct__id')}` : `guest ${guest.accountId} ready to set up`} on ${facts.contract}; locked: ${facts.locked}`);
+    const canClaim = /Claim|Continue as guest/.test(await text('.dock .act'));
     if (!canClaim && !REHEARSAL) throw new Error(`expected a "Claim" button, found: ${await text('.dock')}`);
 
     // ---- pre-roll (not filmed): open on a round a bot has already saved, with time to claim in it ----
@@ -340,26 +346,30 @@ async function record() {
     // ---- beat 2: the guest claims ----
     segment('beat2', 1);
     await page.evaluate(() => window.scrollTo(0, 0));
-    await caption('A guest account claims <b>1,000 NOTIT</b> from the contract’s faucet.');
+    await caption('A guest account claims <b>1,000 NOTIT</b>, then swaps its key for one that <b>can only volunteer</b>.');
     await sleep(1800);
     if (canClaim) {
       await page.locator('.dock .act').click();
-      event('claim clicked', { round: await round() });
-      // Claimed when the button is no longer the claim button and the explorer link is there.
+      event('sign-up clicked', { round: await round() });
+      // Done when the sign-up is over: the key marker is there and the button is the game's again.
       await settle(
         'beat2',
         page.waitForFunction(
-          () => !/Claim/.test(document.querySelector('.dock .act')?.textContent ?? 'Claim') && document.querySelector('.txlink a') !== null,
+          () => document.querySelector('.chainbar .keymark') !== null && !/Claim|Setting up|Signing in|Continue as guest|Try again/.test(document.querySelector('.dock .act')?.textContent ?? 'Claim'),
           null,
-          { timeout: 90_000 },
+          { timeout: 120_000 },
         ),
       );
-      event('claim confirmed', { balance: await balance() });
+      facts.key = await text('.chainbar .keymark');
+      event('sign-up finished', { balance: await balance(), key: facts.key });
+      // The band lifts for a moment, so the header shows "key: volunteer only" beside the account.
+      await caption('');
+      await sleep(2200);
     } else {
       log('rehearsal: this account has already claimed here, so the claim is skipped');
       await sleep(3000);
     }
-    await caption('The guest now holds <b>1,000 NOTIT</b>. A real transaction on NEAR testnet.');
+    await caption('The guest holds <b>1,000 NOTIT</b> and a key that can only volunteer. Real transactions on NEAR testnet.');
     await sleep(900);
     for (const href of await page.locator('.txlink a').evaluateAll((els) => els.map((a) => a.href))) facts.txs.push({ what: 'claim', href });
     await sleep(1400);

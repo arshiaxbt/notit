@@ -74,12 +74,12 @@ export function useNameMax(): number {
   return max;
 }
 
-export function Who({ id, me, max }: { id: string; me: string | null; max?: number }) {
+export function Who({ id, me, max, keepSuffix = true }: { id: string; me: string | null; max?: number; keepSuffix?: boolean }) {
   const usual = useNameMax();
   if (me !== null && id === me) return <span className="who who--me">you</span>;
   return (
     <span className="who" title={id}>
-      {shortAccount(id, Math.min(usual, max ?? usual))}
+      {shortAccount(id, max ?? usual, keepSuffix)}
     </span>
   );
 }

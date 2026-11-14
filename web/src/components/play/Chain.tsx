@@ -1,5 +1,5 @@
 /** Testnet-mode pieces of the Play screen: the contract bar and the guest sign-up. */
-import { accountUrl, txUrl } from '../../client/config';
+import { accessKeysUrl, accountUrl, txUrl } from '../../client/config';
 import type { ChainUi } from '../../hooks/useSession';
 import { cls } from '../ui';
 
@@ -15,6 +15,21 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 
 function roundLength(note: string | undefined): string {
   return note ?? '';
+}
+
+/** What the guest key in this browser may do, linked to the account's key list on the explorer. */
+export function KeyMark({ chain, account }: { chain: ChainUi; account: { id: string; key: 'full' | 'volunteer' | null } }) {
+  if (!account.key) return null;
+  return (
+    <a className="keymark extlink" href={accessKeysUrl(chain.session.config, account.id)} target="_blank" rel="noreferrer noopener">
+      {keyMarkText(account.key)}
+      <span className="sr-only"> (opens the block explorer)</span>
+    </a>
+  );
+}
+
+export function keyMarkText(key: 'full' | 'volunteer'): string {
+  return key === 'volunteer' ? 'key: volunteer only' : 'key: full access';
 }
 
 /** One line: the contract, whether it is locked, the round length, and the deployment switch. */
@@ -66,6 +81,7 @@ export function ChainBar({ chain }: { chain: ChainUi }) {
         ) : (
           <span>{roundLength(deployment.note)}</span>
         )}
+        {account?.kind === 'guest' && account.key && <KeyMark chain={chain} account={account} />}
         {account?.kind === 'guest' && (
           <button
             type="button"

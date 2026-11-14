@@ -1297,9 +1297,10 @@
   .acct__kind {
     display: none;
   }
+  /* the name is shortened once, in code; where even that does not fit, "Sign out" stays alone */
   .acct__id {
-    display: block;
-    max-width: max(84px, calc(100vw - 272px));
+    overflow: visible;
+    text-overflow: clip;
   }
   .acct__out {
     min-height: 27px;
@@ -1660,25 +1661,13 @@
   .field input[type='range'] {
     min-height: 44px;
   }
+  /* text links: the box itself is 44 px tall (padding on an inline box does not move the line) */
   .extlink,
   .linkbtn,
   .foot a,
-  .act__link,
+  .keymark,
   .acct__out {
-    position: relative;
-  }
-  .extlink::after,
-  .linkbtn::after,
-  .foot a::after,
-  .act__link::after,
-  .acct__out::after {
-    content: '';
-    position: absolute;
-    left: -6px;
-    right: -6px;
-    top: 50%;
-    height: 44px;
-    translate: 0 -50%;
+    padding-block: 14px;
   }
   .chainbar__row {
     row-gap: var(--space-4);
@@ -1686,6 +1675,11 @@
 }
 
 /* ---- the narrowest phones (320 px) ---- */
+@media (max-width: 379px) {
+  .acct__id {
+    display: none;
+  }
+}
 @media (max-width: 359px) {
   .top__bar {
     padding-left: var(--space-3);
@@ -1738,5 +1732,17 @@
   .tabs {
     order: 3;
     flex: 1 0 100%;
+  }
+}
+
+/* ---- what the guest key may do: a short mark beside the account, and in the chain bar ---- */
+.keymark {
+  white-space: nowrap;
+  font-size: var(--text-s);
+}
+@media (max-width: 760px) {
+  /* in the ribbon there is no room: the mark is in the chain bar under the stage */
+  .acct .keymark {
+    display: none;
   }
 }

@@ -651,7 +651,7 @@ function Mixed() {
   return (
     <div className="lab__grid">
       <Card labelId="mx-controls" title="Mix" className="controls">
-        <Slider id="mx-alt" label="Altruists" value={altruists} display={`${altruists}`} min={0} max={20} onChange={setAltruists} help="Step up in 30% of rounds, at any price." />
+        <Slider id="mx-alt" label="Altruists" value={altruists} display={`${altruists}`} min={0} max={20} onChange={setAltruists} help="Volunteer in 30% of rounds, at any price." />
         <Slider id="mx-snp" label="Snipers" value={snipers} display={`${snipers}`} min={0} max={20} onChange={setSnipers} help="Always try in the final block." />
         <Slider
           id="mx-miss"
