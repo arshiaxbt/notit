@@ -23,7 +23,7 @@ describe('who stands on the ring', () => {
     const people = peopleFor(s, mock.crowd());
     expect(people).toHaveLength(mock.crowd().length);
     expect(people.some((p) => p.id === DEMO_ACCOUNT)).toBe(false);
-    expect(people.every((p) => p.name !== null && /%$/.test(p.note))).toBe(true);
+    expect(people.every((p) => p.name !== null && /% share$/.test(p.note))).toBe(true);
     // It is one of them, so its face can move to the middle seat.
     expect(s.state.it === null || s.state.it === DEMO_ACCOUNT || people.some((p) => p.id === s.state.it)).toBe(true);
   });

@@ -4,7 +4,7 @@
  * o'clock with the one button. Faces, ring and coins share one coordinate
  * system: pixels from the stage's top-left corner (see layout.ts).
  */
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import type { CrowdMember } from '../../client/types';
 import type { Game, GameSnapshot, RoundClose } from '../../hooks/useGame';
@@ -14,10 +14,10 @@ import { useLive } from '../../hooks/useLive';
 import type { Live } from '../../hooks/useLive';
 import type { ChainUi } from '../../hooks/useSession';
 import { itCollects, maxCostFor, outcomesFor } from '../../lib/cost';
-import { formatCountdown, formatPpm, formatShare, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
+import { NAME_MAX, NAME_MAX_COMPACT, formatCountdown, formatPpm, formatShare, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
 import { Digits, Who, cls, useTweened } from '../ui';
 import { TxLink } from './Chain';
-import { sceneLayout, stableOrder } from './layout';
+import { COMPACT_BELOW, SHORT_BELOW, sceneLayout, stableOrder } from './layout';
 import type { Box, Point, SceneLayout } from './layout';
 
 function amount(v: bigint): string {
@@ -50,7 +50,7 @@ export function peopleFor(snap: GameSnapshot, crowd: CrowdMember[] | null, cap =
   if (crowd) {
     return crowd
       .filter((c) => c.accountId !== me)
-      .map((c) => ({ id: c.accountId, name: c.accountId, note: formatShare(c.balance, s.totalSupply, 1) }));
+      .map((c) => ({ id: c.accountId, name: c.accountId, note: `${formatShare(c.balance, s.totalSupply, 1)} share` }));
   }
   const known: Person[] = snap.heroes
     .filter((h) => h.accountId !== me)
@@ -58,10 +58,10 @@ export function peopleFor(snap: GameSnapshot, crowd: CrowdMember[] | null, cap =
       id: h.accountId,
       name: h.accountId,
       note:
-        h.accountId === s.it && itAccount ? formatShare(itAccount.balance, s.totalSupply, 1) : `${h.saves} ${h.saves === 1 ? 'save' : 'saves'}`,
+        h.accountId === s.it && itAccount ? `${formatShare(itAccount.balance, s.totalSupply, 1)} share` : `${h.saves} ${h.saves === 1 ? 'save' : 'saves'}`,
     }));
   if (s.it && s.it !== me && !known.some((k) => k.id === s.it)) {
-    known.unshift({ id: s.it, name: s.it, note: itAccount ? formatShare(itAccount.balance, s.totalSupply, 1) : '' });
+    known.unshift({ id: s.it, name: s.it, note: itAccount ? `${formatShare(itAccount.balance, s.totalSupply, 1)} share` : '' });
   }
   const mine = snap.account?.claimed ? 1 : 0;
   const anon = Math.max(0, Math.min(s.claimsMade, cap) - mine - known.length);
@@ -188,10 +188,29 @@ function useGlances(stage: React.RefObject<HTMLElement | null>, game: Game, roun
   }, [stage, round, active]);
 }
 
+/* -------------------------------------------------------------- one shared tick */
+
+const LiveContext = createContext<Live | null>(null);
+
+/**
+ * The cost on the button and the figures under the stage come from the same
+ * tick, so they can never disagree by a frame. Only the consumers re-render.
+ */
+export function LiveProvider({ game, children }: { game: Game; children: ReactNode }) {
+  const live = useLive(game, 10);
+  return <LiveContext.Provider value={live}>{children}</LiveContext.Provider>;
+}
+
+function useSharedLive(): Live {
+  const live = useContext(LiveContext);
+  if (!live) throw new Error('LiveProvider is missing');
+  return live;
+}
+
 /* ------------------------------------------------------------------- clock */
 
 /** The ring that is both clock and fuse, and the time inside it. The only part of the scene that moves every frame. */
-function Clock({ game, snap, layout, box, flash, asleep }: { game: Game; snap: GameSnapshot; layout: SceneLayout; box: Box; flash: RoundClose | null; asleep: boolean }) {
+function Clock({ game, snap, layout, box, flash, asleep, scale }: { game: Game; snap: GameSnapshot; layout: SceneLayout; box: Box; flash: RoundClose | null; asleep: boolean; scale: number }) {
   // Fifteen steps a second: a step of the ring is a fraction of a pixel on chain and under two degrees in the fastest demo.
   const live = useLive(game, 15);
   const s = snap.state;
@@ -199,9 +218,12 @@ function Clock({ game, snap, layout, box, flash, asleep }: { game: Game; snap: G
   const stroke = layout.compact ? 10 : 12;
   const r = clockR - stroke / 2;
   const c = 2 * Math.PI * r;
-  const idle = s.saved || asleep || s.roundSupply === 0n;
+  // Once the local clock has rolled into the next round, the ring burns again at once.
+  const idle = !live.rolled && (s.saved || asleep || s.roundSupply === 0n);
   const p = idle ? 0 : live.progress;
-  const text = formatCountdown(live.msLeft);
+  // What the viewer waits through: real seconds, also when the demo runs its rounds fast.
+  const shownMs = live.msLeft / scale;
+  const text = formatCountdown(shownMs);
 
   // Size the numerals to the ring: digits are 0.45em wide, colons narrower.
   const digits = [...text].filter((ch) => ch >= '0' && ch <= '9').length;
@@ -227,7 +249,7 @@ function Clock({ game, snap, layout, box, flash, asleep }: { game: Game; snap: G
             />
           )}
           {!idle && (
-            <g className={cls('ring__tip', live.msLeft <= 10_000 && 'ring__tip--late')} style={{ transform: `rotate(${(p * 360).toFixed(2)}deg)`, transformOrigin: `${center.x}px ${center.y}px` }}>
+            <g className={cls('ring__tip', shownMs <= 10_000 && live.progress >= 0.8 && 'ring__tip--late')} style={{ transform: `rotate(${(p * 360).toFixed(2)}deg)`, transformOrigin: `${center.x}px ${center.y}px` }}>
               <circle cx={center.x} cy={center.y - r} r={7} />
             </g>
           )}
@@ -251,7 +273,7 @@ interface ActState {
   action: 'claim' | 'volunteer' | null;
 }
 
-function actFor(snap: GameSnapshot, live: Live, pending: Game['pending']): ActState {
+function actFor(snap: GameSnapshot, live: Live, pending: Game['pending'], scale: number): ActState {
   const { state: s, config, account, accountId: me } = snap;
   const hasTokens = !!account && account.balance > 0n;
   const none = { cost: null, note: null, disabled: true, action: null } as const;
@@ -280,7 +302,7 @@ function actFor(snap: GameSnapshot, live: Live, pending: Game['pending']): ActSt
       const span = config.maxCostPpm - config.minCostPpm;
       const at = span > 0 ? (config.maxCostPpm - needPpm) / span : 0;
       const roundMs = Number(config.roundNs / 1_000_000n);
-      note = `Within reach at ${formatCountdown((1 - at) * roundMs)}`;
+      note = `Within reach at ${formatCountdown(((1 - at) * roundMs) / scale)}`;
     }
     return { label: "I'll do it", cost, note, disabled: true, action: null };
   }
@@ -288,10 +310,10 @@ function actFor(snap: GameSnapshot, live: Live, pending: Game['pending']): ActSt
 }
 
 /** One line for screen readers, refreshed sparingly. */
-function spokenStatus(snap: GameSnapshot, live: Live): string {
+function spokenStatus(snap: GameSnapshot, live: Live, scale: number): string {
   const s = snap.state;
   const me = snap.accountId;
-  const left = spokenCountdown(live.msLeft);
+  const left = spokenCountdown(live.msLeft / scale);
   const it = s.it ? `${s.it === me ? 'You are' : `${shortAccount(s.it)} is`} It.` : 'Nobody is It yet.';
   if (s.saved && s.hero) return `Round ${s.round} is saved by ${nameOf(s.hero, me)}. ${left} until the next round. ${it}`;
   if (s.roundSupply === 0n) return `Round ${s.round}. Nothing to save yet. ${left} left.`;
@@ -302,7 +324,7 @@ function spokenStatus(snap: GameSnapshot, live: Live): string {
 const GUEST_STEPS = ['account', 'confirm', 'claim'] as const;
 
 /** Testnet with nobody signed in: one click to play as a guest, or a wallet. */
-function SignIn({ chain, claimAmount }: { chain: ChainUi; claimAmount: bigint }) {
+function SignIn({ chain, claimAmount, onUseDemo }: { chain: ChainUi; claimAmount: bigint; onUseDemo(): void }) {
   const { session, state } = chain;
   const { guest, wallet, restoring } = state;
   const running = guest.status === 'running';
@@ -317,11 +339,17 @@ function SignIn({ chain, claimAmount }: { chain: ChainUi; claimAmount: bigint })
   else if (failed) label = 'Try again';
   else if (stored) label = 'Continue as guest';
 
+  const connect = (text: string) => (
+    <button type="button" className="act__link" disabled={wallet.busy || restoring} onClick={() => void session.connectWallet()}>
+      {text}
+    </button>
+  );
+
   return (
     <>
       <button
         type="button"
-        className="act"
+        className={cls('act', (running || restoring) && 'act--pending')}
         disabled={running || restoring}
         title="A throwaway testnet account. Its key stays in this browser."
         onClick={() => void session.playAsGuest()}
@@ -334,22 +362,21 @@ function SignIn({ chain, claimAmount }: { chain: ChainUi; claimAmount: bigint })
             {step + 1 > 0 ? `${step + 1}/3 ` : ''}
             {stepText}
           </span>
-        ) : (
-          <>
-            {failed && guest.error && (
-              <span className="act__alert" title={guest.error}>
-                <span className="act__msg">{guest.error}</span>
-              </span>
-            )}
-            {wallet.error && (
-              <span className="act__alert" title={wallet.error}>
-                <span className="act__msg">{wallet.error}</span>
-              </span>
-            )}
-            <button type="button" className="act__link" disabled={wallet.busy || restoring} onClick={() => void session.connectWallet()}>
-              {wallet.busy ? 'Opening wallets…' : 'Connect wallet'}
+        ) : failed && guest.error ? (
+          // The whole message, and every way out as a real control: the button above tries again.
+          <span className="act__say">
+            {guest.error} Try again in a minute,{' '}
+            <button type="button" className="act__link" onClick={onUseDemo}>
+              use the demo
             </button>
-          </>
+            , or {connect('connect a wallet')}.
+          </span>
+        ) : wallet.error ? (
+          <span className="act__say">
+            {wallet.error} {connect('Try again')}
+          </span>
+        ) : (
+          connect(wallet.busy ? 'Opening wallets…' : 'Connect wallet')
         )}
       </div>
     </>
@@ -357,18 +384,18 @@ function SignIn({ chain, claimAmount }: { chain: ChainUi; claimAmount: bigint })
 }
 
 /** The single action, with the falling cost printed on it. */
-function Act({ game, snap, chain, flash }: { game: Game; snap: GameSnapshot; chain: ChainUi | null; flash: RoundClose | null }) {
-  const live = useLive(game, 10);
+function Act({ game, snap, chain, flash, scale, onUseDemo }: { game: Game; snap: GameSnapshot; chain: ChainUi | null; flash: RoundClose | null; scale: number; onUseDemo(): void }) {
+  const live = useSharedLive();
   const { state: s, config, accountId: me } = snap;
-  const act = actFor(snap, live, game.pending);
+  const act = actFor(snap, live, game.pending, scale);
 
   // Screen readers: one polite sentence when the round or its state changes,
   // and otherwise at most every ten seconds.
   const [spoken, setSpoken] = useState('');
-  const latest = useRef({ snap, live });
-  latest.current = { snap, live };
+  const latest = useRef({ snap, live, scale });
+  latest.current = { snap, live, scale };
   useEffect(() => {
-    const say = () => setSpoken(spokenStatus(latest.current.snap, latest.current.live));
+    const say = () => setSpoken(spokenStatus(latest.current.snap, latest.current.live, latest.current.scale));
     say();
     const t = window.setInterval(say, 10_000);
     return () => window.clearInterval(t);
@@ -424,13 +451,13 @@ function Act({ game, snap, chain, flash }: { game: Game; snap: GameSnapshot; cha
         {spoken}
       </p>
       {signUp && chain ? (
-        <SignIn chain={chain} claimAmount={config.claimAmount} />
+        <SignIn chain={chain} claimAmount={config.claimAmount} onUseDemo={onUseDemo} />
       ) : (
         <>
           <button
             type="button"
             className={cls('act', pending && 'act--pending')}
-            disabled={act.disabled}
+            disabled={act.disabled || live.rolled}
             aria-busy={pending || undefined}
             aria-label={shownCost && act.action === 'volunteer' && !pending ? `${act.label}: burn ${shownCost} NOTIT` : undefined}
             onClick={onAct}
@@ -479,9 +506,12 @@ interface Props {
   flash: RoundClose | null;
   /** The simulated crowd, in Demo mode. */
   crowd: CrowdMember[] | null;
+  /** Game seconds per real second: 1 on chain, more when the demo runs its rounds fast. */
+  scale?: number;
+  onUseDemo(): void;
 }
 
-export function Scene({ game, snap, chain, flash, crowd }: Props) {
+export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }: Props) {
   const [ref, box] = useBox();
   const { state: s, accountId: me } = snap;
   const asleep = isAsleep(snap);
@@ -498,12 +528,50 @@ export function Scene({ game, snap, chain, flash, crowd }: Props) {
 
   // Whoever sits in the middle leaves the ring, and the rest close up around the gap.
   const ring = useMemo(() => order.filter((id) => id !== s.it), [order, s.it]);
-  const layout = useMemo(() => (box.w > 0 && box.h > 0 ? sceneLayout(box, ring.length) : null), [box, ring.length]);
+  // The sentence at the top and the button at the bottom are measured, not assumed: larger
+  // text, or a short window, changes how much room is left for the ring.
+  const pitchRef = useRef<HTMLHeadingElement | null>(null);
+  const [room, setRoom] = useState<{ pitchH: number; dockH: number } | null>(null);
+  const short = box.h > 0 && box.h < SHORT_BELOW && box.w >= COMPACT_BELOW;
+  useLayoutEffect(() => {
+    const stage = ref.current;
+    const pitch = pitchRef.current;
+    const dock = stage?.querySelector<HTMLElement>('.dock');
+    if (!stage || !pitch || !dock) return;
+    const measure = () => {
+      const top = stage.getBoundingClientRect().top;
+      const p = pitch.getBoundingClientRect();
+      const d = dock.getBoundingClientRect();
+      const visible = p.height > 2 && getComputedStyle(pitch).position === 'absolute' && p.width > 2;
+      const pitchH = visible ? Math.round(p.bottom - top) + 2 : 6;
+      // A pinned button covers the bottom of the stage only while the page is at the top; its height is what counts.
+      const dockH = Math.round(getComputedStyle(dock).position === 'fixed' ? d.height : stage.clientHeight - (d.top - top) + 4);
+      setRoom((r) => (r && r.pitchH === pitchH && r.dockH === dockH ? r : { pitchH, dockH }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(pitch);
+    ro.observe(dock);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, [ref, short]);
+  const layout = useMemo(
+    () => (box.w > 0 && box.h > 0 ? sceneLayout(box, ring.length, { ...(room ?? {}), lineH: short ? 4 : undefined }) : null),
+    [box, ring.length, room, short],
+  );
   // Every face on the ring looks straight away from the centre.
   const gazes = useMemo(() => (layout ? layout.slots.map((p) => away(layout.center, p)) : []), [layout]);
 
   const [tip, setTip] = useState<string | null>(null);
   const onTip = useCallback((id: string | null) => setTip(id), []);
+  useEffect(() => {
+    if (tip === null) return;
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setTip(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [tip]);
 
   // When someone steps up, every other face watches them go to the middle for half a second.
   const [watching, setWatching] = useState(false);
@@ -553,7 +621,7 @@ export function Scene({ game, snap, chain, flash, crowd }: Props) {
       const slot = !isIt && idx >= 0 && idx < layout.shown ? slots[idx]! : null;
       if (!slot && !isIt) return;
       const at = isIt ? seat : slot!;
-      const label = [p.name ? shortAccount(p.name) : 'A holder', isIt ? 'It' : p.note].filter(Boolean).join(' · ');
+      const label = [p.name ? shortAccount(p.name, layout.compact ? NAME_MAX_COMPACT : NAME_MAX) : 'A holder', isIt ? 'It' : p.note].filter(Boolean).join(' · ');
       placed.push({ id, at, label });
       els.push(
         <Face key={id} id={id} at={at} r={isIt ? layout.seatR : layout.faceR} gaze={isIt ? STRAIGHT : gazes[idx]!} out={isIt ? STRAIGHT : gazes[idx]!} index={isIt ? 0 : idx} it={isIt} label={label} tab={first} onTip={onTip} />,
@@ -636,15 +704,18 @@ export function Scene({ game, snap, chain, flash, crowd }: Props) {
         flash?.kind === 'collapsed' && 'stage--paid',
         watching && 'stage--watch',
         arriving && 'stage--arriving',
+        short && 'stage--short',
         layout?.compact && 'stage--compact',
       )}
-      aria-label={`Round ${s.round}`}
+      aria-label="The game"
     >
-      <h1 className="stage__pitch">Somebody has to do it. If nobody does, everybody pays the last person who did.</h1>
-      <Act game={game} snap={snap} chain={chain} flash={flash} />
+      <h1 className="stage__pitch" ref={pitchRef}>
+        Somebody has to do it. If nobody does, everybody pays the last person who did.
+      </h1>
+      <Act game={game} snap={snap} chain={chain} flash={flash} scale={scale} onUseDemo={onUseDemo} />
       {layout && (
         <>
-          <Clock game={game} snap={snap} layout={layout} box={box} flash={flash} asleep={asleep} />
+          <Clock game={game} snap={snap} layout={layout} box={box} flash={flash} asleep={asleep} scale={scale} />
           {s.it === null && (
             <span className="seat" aria-hidden="true" style={{ '--r': `${layout.seatR}px`, transform: `translate(${layout.seat.x}px, ${layout.seat.y}px)` } as CSSProperties} />
           )}
@@ -725,8 +796,8 @@ interface Fig {
 }
 
 /** What each ending of this round does to one balance, and what It stands to collect. */
-export function Figures({ game, snap, flash }: { game: Game; snap: GameSnapshot; flash: RoundClose | null }) {
-  const live = useLive(game, 4);
+export function Figures({ snap, flash }: { snap: GameSnapshot; flash: RoundClose | null }) {
+  const live = useSharedLive();
   const { state: s, config, account, itAccount, accountId: me } = snap;
   const hasTokens = !!account && account.balance > 0n;
   const balance = hasTokens ? account!.balance : config.claimAmount;
@@ -738,7 +809,8 @@ export function Figures({ game, snap, flash }: { game: Game; snap: GameSnapshot;
   const shownBalance = useTweened(balance);
   const collected = useTweened(itAccount?.collected ?? 0n);
   const paid = flash?.kind === 'collapsed';
-  const of = hasTokens ? 'your balance' : `${formatToken(balance)} NOTIT`;
+  // Nothing held, nothing to show: the figures are dashes until there is a balance.
+  const of = 'your balance';
 
   // What the round that just closed did to this balance: a cut, or a payment to It.
   const delta = paid && flash.balanceBefore !== null && flash.balanceAfter !== null ? flash.balanceAfter - flash.balanceBefore : 0n;
@@ -749,7 +821,7 @@ export function Figures({ game, snap, flash }: { game: Game; snap: GameSnapshot;
       label: 'keep',
       value: (
         <>
-          <Digits text={amount(shownBalance)} />
+          {hasTokens ? <Digits text={amount(shownBalance)} /> : '—'}
           {delta !== 0n && (
             <span className={cls('figs__delta', delta > 0n && 'figs__delta--up')} key={flash!.id}>
               {delta > 0n ? '+' : '−'}
@@ -771,14 +843,14 @@ export function Figures({ game, snap, flash }: { game: Game; snap: GameSnapshot;
       : {
           key: 'none',
           label: `pay ${cutPct}`,
-          value: charged ? <Digits text={amount(o.ifCollapsed)} /> : '—',
+          value: charged && hasTokens ? <Digits text={amount(o.ifCollapsed)} /> : '—',
           tone: 'cut',
           title: `Nobody does it: ${of} after the ${cutPct} cut`,
         },
     {
       key: 'do',
       label: 'burn now',
-      value: open && o.ifYouDoIt !== null ? <Digits text={amount(o.ifYouDoIt)} /> : '—',
+      value: open && hasTokens && o.ifYouDoIt !== null ? <Digits text={amount(o.ifYouDoIt)} /> : '—',
       title: `You do it now: ${of} after burning the cost`,
     },
   ];

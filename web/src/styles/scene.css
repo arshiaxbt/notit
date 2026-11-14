@@ -15,7 +15,7 @@
   --s-stroke: var(--border);
   position: relative;
   z-index: 1;
-  height: clamp(480px, calc(100svh - var(--chrome-h, 97px) - 85px), 760px);
+  height: clamp(360px, calc(100svh - var(--chrome-h, 97px) - 85px), 760px);
   background: var(--accent);
   color: var(--s-ink);
 }
@@ -363,7 +363,7 @@
   position: absolute;
   left: 50%;
   /* Anchored from the top so a long message grows downwards, not over your face. */
-  top: calc(100% - 96px);
+  top: calc(100% - 108px);
   z-index: 4;
   width: min(340px, calc(100% - 28px));
   transform: translateX(-50%);
@@ -432,12 +432,19 @@
   color: var(--s-ink);
 }
 .act__note {
-  min-height: 1.35rem;
-  margin-top: var(--space-1);
+  /* Two lines are always kept free under the button, so a message never moves anything. */
+  width: min(560px, calc(100vw - 28px));
+  min-height: 2.5rem;
+  margin: var(--space-1) 0 0 50%;
   font-size: var(--text-s);
   font-weight: 600;
-  line-height: 1.35rem;
+  line-height: 1.25rem;
   text-align: center;
+  translate: -50% 0;
+}
+.act__say {
+  display: block;
+  text-wrap: balance;
 }
 .act__note a {
   color: inherit;
@@ -546,11 +553,37 @@
   }
 }
 
+/* ---- a short, wide window (a phone on its side, a heavily zoomed page): the ring, your face
+   and the button must still fit, so the sentence and the line give way ---- */
+@media (max-height: 520px) and (min-width: 620px) {
+  .stage {
+    height: max(250px, calc(100svh - var(--chrome-h, 113px)));
+  }
+}
+.stage--short .stage__pitch,
+.stage--short .stage__under {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.stage--short .dock {
+  top: calc(100% - 58px);
+}
+.stage--short .act {
+  min-height: 46px;
+}
+.stage--short .act__note {
+  min-height: 0;
+}
+
 /* ---- phone: a tall oval, the button pinned to the bottom of the viewport ---- */
 @media (max-width: 619px) {
   .stage {
     --s-stroke: 2.5px;
-    height: clamp(440px, calc(100svh - var(--chrome-h, 159px)), 720px);
+    height: clamp(380px, calc(100svh - var(--chrome-h, 127px)), 720px);
   }
   .dock {
     position: fixed;
@@ -567,11 +600,10 @@
   .act {
     min-height: 54px;
   }
-  /* Room for a two-line message is always there, so the button stays where it is. */
   .act__note {
-    min-height: 38px;
-    display: grid;
-    align-content: center;
+    width: auto;
+    margin-left: 0;
+    translate: none;
   }
   .stage__line--saved {
     font-size: var(--text-m);

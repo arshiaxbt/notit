@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { prefersReducedMotion } from '../hooks/useReducedMotion';
-import { shortAccount } from '../lib/format';
+import { NAME_MAX, NAME_MAX_COMPACT, shortAccount } from '../lib/format';
 
 export function cls(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
@@ -59,19 +59,27 @@ export function useTweened(value: bigint, ms = 900): bigint {
   return shown;
 }
 
-/** A name for a very narrow place: the part before the dot, cut. */
-function tightName(id: string, max: number): string {
-  const dot = id.indexOf('.');
-  const stem = dot > 0 ? id.slice(0, dot) : id;
-  return stem.length <= max ? stem : `${stem.slice(0, Math.max(3, max - 1))}…`;
+/** An account name: "you" for the viewer, shortened otherwise. */
+/** The one length names are cut to at this width: shorter on a phone. */
+export function useNameMax(): number {
+  const query = '(max-width: 619px)';
+  const read = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches ? NAME_MAX_COMPACT : NAME_MAX);
+  const [max, setMax] = useState(read);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setMax(read());
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return max;
 }
 
-/** An account name: "you" for the viewer, shortened otherwise. */
 export function Who({ id, me, max }: { id: string; me: string | null; max?: number }) {
+  const usual = useNameMax();
   if (me !== null && id === me) return <span className="who who--me">you</span>;
   return (
     <span className="who" title={id}>
-      {max !== undefined && max < 14 ? tightName(id, max) : shortAccount(id, max)}
+      {shortAccount(id, Math.min(usual, max ?? usual))}
     </span>
   );
 }

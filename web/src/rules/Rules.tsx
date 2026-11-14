@@ -47,7 +47,7 @@ export function Rules({ config, mode, lock }: Props) {
     ['Cut paid to It', 'cut_ppm', cut],
     ['Unsaved rounds charged in a row', 'MAX_COLLAPSE_RUN', String(run)],
     ['Faucet claim per account', 'claim_amount', `${claim} NOTIT`],
-    ['Claims ever', 'claim_cap', formatInt(c.claimCap)],
+    ['Faucet claims in total', 'claim_cap', formatInt(c.claimCap)],
   ];
 
   return (
@@ -60,27 +60,27 @@ export function Rules({ config, mode, lock }: Props) {
 
       <ol className="rules">
         <li className="rule">
-          <h3>
+          <h2>
             Time is split into rounds of {roundLength(c.roundNs)}
             {mode === 'demo' ? ', sped up in the demo' : ''}.
-          </h3>
+          </h2>
         </li>
         <li className="rule">
-          <h3>
+          <h2>
             In each round the cost to volunteer falls from {max} of the supply to {min}.
-          </h3>
+          </h2>
         </li>
         <li className="rule">
-          <h3>The first to volunteer burns that cost, saves the round and becomes It.</h3>
+          <h2>The first to volunteer burns that cost, saves the round and becomes It.</h2>
         </li>
         <li className="rule">
-          <h3>
+          <h2>
             If nobody does, every balance is cut {cut} and It collects it, for at most {run} rounds in a row.
-          </h3>
+          </h2>
         </li>
         <li className="rule">
           <div>
-            <h3>Nobody can change these rules: the contract has no admin and its account has no keys.</h3>
+            <h2>Nobody can change these rules: the contract has no admin and its account has no keys.</h2>
             {unlocked && <p>Not locked yet: this contract account still has an access key.</p>}
             {lock?.status === 'locked' && <p>Checked just now: this contract account has no access keys.</p>}
           </div>
@@ -88,12 +88,12 @@ export function Rules({ config, mode, lock }: Props) {
       </ol>
 
       <p className="rules__stakes">
-        A save moves value from the volunteer to everyone else. A collapse moves value from everyone to It.
+        A save moves value from the volunteer to everyone else. An unsaved round moves value from everyone to It.
       </p>
 
       <div className="rules__cols">
         <Card labelId="params-title" title="The numbers">
-          <div className="tablewrap">
+          <div className="tablewrap" tabIndex={0} role="region" aria-label="Table of the numbers">
             <table className="table">
               <tbody>
                 {rows.map(([label, code, value]) => (

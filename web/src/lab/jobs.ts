@@ -27,11 +27,11 @@ export const PRESETS: Record<BystanderPreset, { label: string; blurb: string; sp
   },
   myopic: {
     label: 'Rule followers',
-    blurb: 'Each player pays as soon as the cost is less than what a collapse would take from them.',
+    blurb: 'Each holder pays as soon as the cost is less than what an unsaved round would take from them.',
     spec: { kind: 'rationalTimer' },
   },
   throne: {
-    label: 'Throne-aware',
+    label: 'Also want to be It',
     blurb: 'Like rule followers, but they also count what being It could earn them later.',
     spec: { kind: 'throneAware' },
   },
@@ -42,7 +42,7 @@ export const PRESETS: Record<BystanderPreset, { label: string; blurb: string; sp
   },
   altruists: {
     label: 'Occasional altruists',
-    blurb: 'Each player steps up in 5% of rounds, whatever the price.',
+    blurb: 'Each holder volunteers in 5% of rounds, whatever the price.',
     spec: { kind: 'altruist', h: 0.05 },
   },
 };

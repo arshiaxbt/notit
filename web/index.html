@@ -28,18 +28,24 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <style>
-      /* First paint, before the script or the stylesheet arrive: the page colour, the name and the yellow stage. */
-      html { background: #f4f2ec; }
-      html[data-theme='dark'] { background: #14120d; }
-      body { margin: 0; }
-      .boot { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #16130c; }
-      html[data-theme='dark'] .boot__top { color: #fff4d6; }
-      .boot__top { box-sizing: border-box; height: 97px; padding: 27px 16px 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 800; }
-      .boot__stage { box-sizing: border-box; height: clamp(480px, calc(100svh - 182px), 760px); padding: 14px; background: #ffd60a; font-size: 1.2rem; font-weight: 700; text-align: center; }
-      .boot__stage p { margin: 0 0 12px; }
+      /* First paint, before the script or the stylesheet arrive. The static shell below uses the
+         app's own class names, so the real header and stage replace it without anything moving. */
+      html { background: #f4f2ec; color: #16130c; }
+      html[data-theme='dark'] { background: #14120d; color: #fff4d6; }
+      body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      .ribbon { margin: 0; padding: 5px 12px; min-height: 17px; background: #16130c; color: #fff4d6; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.09em; line-height: 17px; text-align: center; text-transform: uppercase; }
+      .top__bar.boot-bar { box-sizing: border-box; max-width: 1180px; min-height: 70px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; }
+      .logo { display: inline-flex; align-items: center; gap: 8px; font-size: 1.6rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+      .logo__it { padding: 4px 8px; background: #ffd60a; color: #16130c; border: 3px solid #16130c; border-radius: 12px; transform: rotate(-5deg); }
+      .stage { position: relative; height: clamp(360px, calc(100svh - 97px - 85px), 760px); background: #ffd60a; color: #16130c; }
+      .stage__pitch { margin: 0; padding: 14px 14px 0; font-size: 1.2rem; font-weight: 700; line-height: 1.25; text-align: center; }
+      .boot-note { margin: 12px 0 0; text-align: center; font-weight: 600; }
+      @media (max-width: 760px) {
+        .top__bar.boot-bar { min-height: 102px; align-items: flex-start; align-content: flex-start; padding-top: 11px; }
+      }
       @media (max-width: 619px) {
-        .boot__top { height: 123px; }
-        .boot__stage { height: clamp(440px, calc(100svh - 123px), 720px); font-size: 1rem; }
+        .stage { height: clamp(380px, calc(100svh - 127px), 720px); }
+        .stage__pitch { font-size: 1rem; }
       }
     </style>
     <script>
@@ -59,12 +65,19 @@
   </head>
   <body>
     <div id="root">
-      <div class="boot">
-        <div class="boot__top">Not it!</div>
-        <div class="boot__stage">
-          <p>Somebody has to do it. If nobody does, everybody pays the last person who did.</p>
-          <noscript><p>This page needs JavaScript: the game runs in your browser.</p></noscript>
-        </div>
+      <div class="app">
+        <header class="top">
+          <p class="ribbon"><span>no value</span></p>
+          <div class="top__bar boot-bar">
+            <span class="logo" aria-label="Not It"><span class="logo__not" aria-hidden="true">Not</span><span class="logo__it" aria-hidden="true">it!</span></span>
+          </div>
+        </header>
+        <main class="main main--bleed">
+          <section class="stage">
+            <h1 class="stage__pitch">Somebody has to do it. If nobody does, everybody pays the last person who did.</h1>
+            <noscript><p class="boot-note">This page needs JavaScript: the game runs in your browser.</p></noscript>
+          </section>
+        </main>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

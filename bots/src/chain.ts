@@ -5,7 +5,7 @@ import type { KeyPairString } from "near-api-js";
 
 export const RPC_URLS = (
   process.env.NEAR_RPC_URLS ??
-  "https://test.rpc.fastnear.com,https://near-testnet.drpc.org,https://api.zan.top/near-testnet,https://testnet-rpc.intea.rs"
+  "https://near-testnet.drpc.org,https://test.rpc.fastnear.com,https://api.zan.top/near-testnet,https://testnet-rpc.intea.rs"
 )
   .split(",")
   .map((url) => url.trim())

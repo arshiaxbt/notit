@@ -203,7 +203,7 @@ export class ChainSession {
       try {
         guest = await createGuestAccount(this.config);
       } catch (e) {
-        this.guestFail('account', e instanceof Error ? e.message : 'The testnet faucet did not create an account.');
+        this.guestFail('account', e instanceof Error ? e.message : 'The faucet refused.');
         return;
       }
       saveGuest(network, guest);
@@ -213,13 +213,13 @@ export class ChainSession {
     this.guestStep('confirm');
     const visible = await waitForAccount(this.config, guest.accountId).catch(() => false);
     if (!visible) {
-      this.guestFail('confirm', 'The new account has not shown up on the network yet. Give it a moment and try again.');
+      this.guestFail('confirm', 'The new account is not on the network yet.');
       return;
     }
     try {
       this.setSigner(await guestSigner(this.config, guest));
     } catch (e) {
-      this.guestFail('confirm', e instanceof Error ? e.message : 'Could not load the guest key.');
+      this.guestFail('confirm', 'The guest key could not be loaded.');
       return;
     }
 
@@ -239,7 +239,7 @@ export class ChainSession {
       if (res.code.startsWith('ERR_') && !['ERR_UNKNOWN', 'ERR_NETWORK'].includes(res.code)) break;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    this.guestFail('claim', `Your guest account exists, but the claim did not go through. ${last.message}`);
+    this.guestFail('claim', 'The account is made; the claim did not go through.');
     this.set({ version: this.state.version + 1 });
   }
 

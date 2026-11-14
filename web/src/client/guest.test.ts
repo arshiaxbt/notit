@@ -54,10 +54,8 @@ describe('faucet answers', () => {
     const e = error as FaucetError;
     expect(e.status).toBe(429);
     expect(e.message).toBe(faucetMessage(429));
-    expect(e.message).toMatch(/faucet is busy/i);
-    expect(e.message).toMatch(/try again in a minute/i);
-    expect(e.message).toMatch(/connect a wallet/i);
-    expect(e.message).toMatch(/Demo mode/);
+    // One short, complete sentence; what to do next is offered by the page as real controls.
+    expect(e.message).toBe('The faucet is busy.');
     // The faucet's raw words and the status code stay out of the message people read.
     expect(e.message).not.toMatch(/429|Too Many Requests/);
     expect(e.detail).toBe('Too Many Requests');
@@ -66,9 +64,13 @@ describe('faucet answers', () => {
   });
 
   it('has a message for server trouble and for other refusals', () => {
-    expect(faucetMessage(503)).toMatch(/having trouble.*503/);
-    expect(faucetMessage(400)).toMatch(/refused.*400/);
-    for (const status of [400, 429, 503]) expect(faucetMessage(status)).toMatch(/Demo mode/);
+    expect(faucetMessage(503)).toBe('The faucet is down.');
+    expect(faucetMessage(400)).toBe('The faucet refused.');
+    // Short enough to sit on one line under the button, and never the raw status.
+    for (const status of [400, 429, 503]) {
+      expect(faucetMessage(status).length).toBeLessThanOrEqual(24);
+      expect(faucetMessage(status)).not.toMatch(/\d/);
+    }
   });
 });
 
@@ -158,6 +160,34 @@ describe('RPC endpoints', () => {
     expect(fast.calls[1]).toEqual([{ method: 'get_state' }]);
     // Plain properties come from the first endpoint.
     expect(rpc.url).toBe('https://fast.invalid');
+  });
+
+  it('rests a refused endpoint for a minute by default, and twice as long if it refuses again', async () => {
+    let refuse = true;
+    let clock = 0;
+    const first = endpoint('first', () => (refuse ? new TypeError('Failed to fetch') : 'from first'));
+    const second = endpoint('second', () => 'from second');
+    const rpc = preferFirst([first, second], { now: () => clock });
+
+    await rpc.callFunction({ method: 'get_state' });
+    clock += 59_000;
+    await rpc.callFunction({ method: 'get_state' });
+    expect(first.calls).toHaveLength(1); // still resting
+    clock += 2_000;
+    await rpc.callFunction({ method: 'get_state' });
+    expect(first.calls).toHaveLength(2); // asked again after a minute, refused again
+    clock += 61_000;
+    await rpc.callFunction({ method: 'get_state' });
+    expect(first.calls).toHaveLength(2); // now resting for two minutes
+    clock += 60_000;
+    refuse = false;
+    expect(await rpc.callFunction({ method: 'get_state' })).toBe('from first');
+    // An answer clears the count: the next refusal rests one minute again.
+    refuse = true;
+    await rpc.callFunction({ method: 'get_state' });
+    clock += 61_000;
+    await rpc.callFunction({ method: 'get_state' });
+    expect(first.calls).toHaveLength(5);
   });
 
   it('still asks when every endpoint has refused recently', async () => {

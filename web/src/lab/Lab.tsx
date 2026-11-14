@@ -5,6 +5,7 @@ import { XYChart } from '../components/charts/XYChart';
 import type { Tick } from '../components/charts/XYChart';
 import { Card, cls } from '../components/ui';
 import { formatInt, formatToken } from '../lib/format';
+import { queryGet, querySet } from '../lib/url';
 import { PRESETS, SWEEP, theoryFailure } from './jobs';
 import type { BystanderPreset, BystanderRow, PathResult } from './jobs';
 import { runInBackground } from './runner';
@@ -261,8 +262,8 @@ function Bystander() {
     <p>Simulating…</p>
   ) : (
     <p>
-      With <b>{n}</b> players nobody stepped up in <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds; the theory
-      says {pct(picked.theory)}.
+      With <b>{n}</b> holders, <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds went unsaved; the theory says{' '}
+      {pct(picked.theory)}.
     </p>
   );
 
@@ -274,11 +275,11 @@ function Bystander() {
           label="Crowd size"
           value={pos}
           display={`${n}`}
-          valueText={`${n} players`}
+          valueText={`${n} holders`}
           min={0}
           max={SLIDER_STEPS}
           onChange={setPos}
-          help="Players who could volunteer, 2 to 300. One more account is already It and sits still."
+          help="Holders who could volunteer, 2 to 300. One more account is already It and sits still."
         />
         <Select<number>
           id="by-trials"
@@ -305,29 +306,29 @@ function Bystander() {
       <div className="lab__results">
         <div className="reading">{reading}</div>
 
-        <Card labelId="by-chart" title="Rounds nobody saved, by crowd size">
+        <Card labelId="by-chart" title="Unsaved rounds, by crowd size">
           <XYChart
-            ariaLabel={`Share of rounds nobody saved against crowd size, simulated and theory. At ${n} players: simulated ${picked ? pct(picked.simulated) : 'pending'}, theory ${pct(theoryFailure(n))}.`}
+            ariaLabel={`Share of unsaved rounds against crowd size, simulated and theory. At ${n} holders: simulated ${picked ? pct(picked.simulated) : 'pending'}, theory ${pct(theoryFailure(n))}.`}
             series={[
               { id: 'theory', label: 'Theory (volunteer’s dilemma)', kind: 'line', points: THEORY_POINTS },
-              { id: 'sim', label: `Simulated, ${PRESETS[preset].label.toLowerCase()}`, kind: 'dots', points: rows.map((r) => ({ x: r.n, y: r.simulated })) },
+              { id: 'sim', label: `Simulated: ${PRESETS[preset].label}`, kind: 'dots', points: rows.map((r) => ({ x: r.n, y: r.simulated })) },
             ]}
             xDomain={[N_MIN, N_MAX]}
             yDomain={[0, 1]}
             xLog
             xTicks={N_TICKS}
             yTicks={PCT_TICKS}
-            xLabel="Crowd size (players, log scale)"
-            yLabel="Rounds nobody saved"
+            xLabel="Crowd size (holders, log scale)"
+            yLabel="Unsaved rounds"
             pickX={n}
-            pickLabel={`${n} players`}
+            pickLabel={`${n} holders`}
             snapXs={snapXs}
             busy={running && rows.length === 0}
             tip={(x) => {
               const r = rows.find((row) => row.n === x);
               if (!r) return null;
               return {
-                title: `${r.n} players`,
+                title: `${r.n} holders`,
                 rows: [
                   ['simulated', pct(r.simulated)],
                   ['theory', pct(r.theory)],
@@ -339,7 +340,7 @@ function Bystander() {
 
         <Card
           labelId="by-path"
-          title={`Supply over ${formatInt(path?.rounds ?? trials)} rounds in a row, ${path?.n ?? n} players`}
+          title={`Supply over ${formatInt(path?.rounds ?? trials)} rounds in a row, ${path?.n ?? n} holders`}
           aside={
             <ul className="legend">
               <li>
@@ -347,7 +348,7 @@ function Bystander() {
               </li>
               <li>
                 <span className="legend__swatch" style={{ height: 6, background: 'var(--muted)' }} aria-hidden="true" /> Unsaved,
-                dormant
+                asleep
               </li>
             </ul>
           }
@@ -355,7 +356,7 @@ function Bystander() {
           {path ? (
             <>
               <XYChart
-                ariaLabel={`Total supply over ${path.rounds} consecutive rounds with ${path.n} players: from ${tokens(path.supplyStart)} to ${tokens(path.supplyEnd)} NOTIT.`}
+                ariaLabel={`Total supply over ${path.rounds} consecutive rounds with ${path.n} holders: from ${tokens(path.supplyStart)} to ${tokens(path.supplyEnd)} NOTIT.`}
                 series={[{ id: 'supply', label: 'Supply', kind: 'line', points: path.points.map((p) => ({ x: p.round, y: p.supply })) }]}
                 xDomain={[1, Math.max(2, path.rounds)]}
                 yDomain={[supplyTicks[0]!, supplyTicks[supplyTicks.length - 1]!]}
@@ -374,7 +375,7 @@ function Bystander() {
                     rows: [
                       ['NOTIT supply', formatInt(p.supply)],
                       [
-                        p.outcome === 'saved' ? '· someone did it' : p.outcome === 'collapsed' ? '· everyone paid It' : '· nothing charged',
+                        p.outcome === 'saved' ? '· saved' : p.outcome === 'collapsed' ? '· unsaved, paid to It' : '· unsaved, asleep',
                         p.outcome === 'saved' ? 'Saved' : 'Unsaved',
                       ],
                     ],
@@ -383,8 +384,8 @@ function Bystander() {
               />
               <ul className="figures" style={{ marginTop: 'var(--space-3)' }}>
                 <Figure label="Saved" value={formatInt(path.saved)} />
-                <Figure label="Unsaved, paid It" value={formatInt(path.collapsed)} />
-                <Figure label="Unsaved, dormant" value={formatInt(path.dormant)} />
+                <Figure label="Unsaved, paid to It" value={formatInt(path.collapsed)} />
+                <Figure label="Unsaved, asleep" value={formatInt(path.dormant)} />
                 <Figure label="Burned" value={tokens(path.totalBurned)} />
               </ul>
             </>
@@ -393,13 +394,14 @@ function Bystander() {
           )}
         </Card>
 
-        <Card labelId="by-table" title="Numbers">
-          <div className="tablewrap">
+        <details className="numbers">
+<summary>Numbers</summary>
+          <div className="tablewrap" tabIndex={0} role="region" aria-label="Numbers">
             <table className="table">
               <thead>
                 <tr>
-                  <th scope="col">Players</th>
-                  <th scope="col" className="num">
+                  <th scope="col">Holders</th>
+                  <th scope="col" className="num col-wide">
                     One acts
                   </th>
                   <th scope="col" className="num">
@@ -408,7 +410,7 @@ function Bystander() {
                   <th scope="col" className="num">
                     Simulated
                   </th>
-                  <th scope="col" className="num">
+                  <th scope="col" className="num col-wide">
                     Gap
                   </th>
                 </tr>
@@ -417,16 +419,16 @@ function Bystander() {
                 {rows.map((r) => (
                   <tr key={r.n} className={cls(r.n === n && 'is-picked')}>
                     <th scope="row">{r.n}</th>
-                    <td className="num">{pct(r.p)}</td>
+                    <td className="num col-wide">{pct(r.p)}</td>
                     <td className="num">{pct(r.theory)}</td>
                     <td className="num">{pct(r.simulated)}</td>
-                    <td className="num">{gap(r.simulated - r.theory)}</td>
+                    <td className="num col-wide">{gap(r.simulated - r.theory)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </Card>
+        </details>
       </div>
     </div>
   );
@@ -435,8 +437,8 @@ function Bystander() {
 /* ------------------------------------------------------------- B. who pays */
 
 function strategyName(kind: string): string {
-  if (kind === 'rationalTimer') return 'Myopic holders';
-  if (kind === 'throneAware') return 'Throne-aware holders';
+  if (kind === 'rationalTimer') return 'Weigh this round only';
+  if (kind === 'throneAware') return 'Also want to be It';
   return kind;
 }
 
@@ -509,7 +511,7 @@ function WhoPays() {
 
   return (
     <div className="lab__grid">
-      <Card labelId="wp-controls" title="Holders" className="controls">
+      <Card labelId="wp-controls" title="Crowd" className="controls">
         <Slider
           id="wp-holders"
           label="Holders"
@@ -558,29 +560,27 @@ function WhoPays() {
               />
             </Card>
 
-            <Card labelId="wp-table" title="Two kinds of holder, same balances">
-              <div className="tablewrap">
+            <details className="numbers">
+<summary>Numbers</summary>
+              <div className="tablewrap" tabIndex={0} role="region" aria-label="Numbers">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th scope="col">Everyone plays</th>
+                      <th scope="col">How holders decide</th>
                       <th scope="col" className="num">
                         Saved
                       </th>
                       <th scope="col" className="num">
-                        Paid It
+                        Unsaved
                       </th>
                       <th scope="col" className="num">
-                        Dormant
+                        Asleep
                       </th>
-                      <th scope="col" className="num">
+                      <th scope="col" className="num col-wide">
                         Burned
                       </th>
-                      <th scope="col" className="num">
-                        Moved to It
-                      </th>
-                      <th scope="col" className="num">
-                        Inequality
+                      <th scope="col" className="num col-wide">
+                        Paid to It
                       </th>
                     </tr>
                   </thead>
@@ -589,36 +589,32 @@ function WhoPays() {
                       <tr key={r.strategy}>
                         <th scope="row">
                           {strategyName(r.strategy)}
-                          <span className="table__sub">armed start</span>
+                          <span className="table__sub">someone is It</span>
                         </th>
                         <td className="num">{pct(r.savedShare)}</td>
                         <td className="num">{pct(r.collapsedShare)}</td>
                         <td className="num">{pct(r.dormantShare)}</td>
-                        <td className="num">{tokens(r.totalBurned)}</td>
-                        <td className="num">{tokens(r.totalPaid)}</td>
-                        <td className="num">
-                          {result.giniStart.toFixed(2)} → {r.giniEnd.toFixed(2)}
-                        </td>
+                        <td className="num col-wide">{tokens(r.totalBurned)}</td>
+                        <td className="num col-wide">{tokens(r.totalPaid)}</td>
                       </tr>
                     ))}
                     {result.coldStart.map((r) => (
                       <tr key={`cold-${r.strategy}`}>
                         <th scope="row">
                           {strategyName(r.strategy)}
-                          <span className="table__sub">cold start, nobody is It</span>
+                          <span className="table__sub">nobody is It yet</span>
                         </th>
                         <td className="num">{pct(r.savedShare)}</td>
                         <td className="num">—</td>
                         <td className="num">{pct(r.dormantShare)}</td>
-                        <td className="num">—</td>
-                        <td className="num">—</td>
-                        <td className="num">—</td>
+                        <td className="num col-wide">—</td>
+                        <td className="num col-wide">—</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </Card>
+            </details>
           </>
         )}
       </div>
@@ -702,10 +698,10 @@ function Mixed() {
             </div>
 
             <ul className="figures">
-              <Figure label="Nobody saved" value={pct(result.failureRate)} />
+              <Figure label="Unsaved" value={pct(result.failureRate)} />
               <Figure label="Longest streak" value={formatInt(result.longestStreak)} />
               <Figure label="Burned" value={tokens(result.totalBurned)} />
-              <Figure label="Moved to It" value={tokens(result.totalPaid)} />
+              <Figure label="Paid to It" value={tokens(result.totalPaid)} />
             </ul>
 
             <Card
@@ -746,8 +742,9 @@ function Mixed() {
               </div>
             </Card>
 
-            <Card labelId="mx-table" title="The numbers" >
-              <div className="tablewrap">
+            <details className="numbers">
+<summary>Numbers</summary>
+              <div className="tablewrap" tabIndex={0} role="region" aria-label="Numbers">
                 <table className="table">
                   <thead>
                     <tr>
@@ -755,17 +752,17 @@ function Mixed() {
                       <th scope="col" className="num">
                         Saves
                       </th>
-                      <th scope="col" className="num">
+                      <th scope="col" className="num col-wide">
                         Burned
                       </th>
                       <th scope="col" className="num">
-                        Gained as It
+                        Paid to It
                       </th>
-                      <th scope="col" className="num">
+                      <th scope="col" className="num col-wide">
                         Late tries
                       </th>
                       <th scope="col" className="num">
-                        Share, start → end
+                        Share
                       </th>
                     </tr>
                   </thead>
@@ -777,9 +774,9 @@ function Mixed() {
                           <span className="table__sub">{g.count} holders</span>
                         </th>
                         <td className="num">{formatInt(g.saves)}</td>
-                        <td className="num">{tokens(g.burned)}</td>
+                        <td className="num col-wide">{tokens(g.burned)}</td>
                         <td className="num">{tokens(g.collected)}</td>
-                        <td className="num">{formatInt(g.missed)}</td>
+                        <td className="num col-wide">{formatInt(g.missed)}</td>
                         <td className="num">
                           {pct(g.shareStart)} → {pct(g.shareEnd)}
                         </td>
@@ -788,7 +785,7 @@ function Mixed() {
                   </tbody>
                 </table>
               </div>
-            </Card>
+            </details>
           </>
         )}
       </div>
@@ -799,7 +796,15 @@ function Mixed() {
 /* -------------------------------------------------------------------- page */
 
 export function Lab() {
-  const [exp, setExp] = useState<Experiment>('bystander');
+  // The experiment on show is part of the address (`?lab=`), so a reload or a shared link keeps it.
+  const [exp, setExpState] = useState<Experiment>(() => {
+    const asked = queryGet('lab');
+    return EXPERIMENTS.some((x) => x.id === asked) ? (asked as Experiment) : 'bystander';
+  });
+  const setExp = (next: Experiment) => {
+    setExpState(next);
+    querySet('lab', next === 'bystander' ? null : next);
+  };
   const refs = useRef<Partial<Record<Experiment, HTMLButtonElement | null>>>({});
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {

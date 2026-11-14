@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PITCH_H_TWO_LINES, PITCH_ONE_LINE_FROM, COMPACT_BELOW, LINE_H, LINE_H_COMPACT, DOCK_H, DOCK_H_COMPACT, MAX_FACES, PITCH_H, PITCH_H_COMPACT, MAX_FACES_COMPACT, YOU_SCALE, pointsOnArc, sceneBoxFor, sceneLayout, stableOrder } from './layout';
+import { SHORT_BELOW, PITCH_H_TWO_LINES, PITCH_ONE_LINE_FROM, COMPACT_BELOW, LINE_H, LINE_H_COMPACT, DOCK_H, DOCK_H_COMPACT, MAX_FACES, PITCH_H, PITCH_H_COMPACT, MAX_FACES_COMPACT, YOU_SCALE, pointsOnArc, sceneBoxFor, sceneLayout, stableOrder } from './layout';
 import type { SceneLayout } from './layout';
 
 const VIEWPORTS: Array<[number, number]> = [
@@ -24,7 +24,10 @@ describe('ring layout', () => {
     const box = sceneBoxFor(vw, vh);
     for (const count of COUNTS) {
       it(`${count} holders at ${vw}×${vh}: no overlaps, nothing outside the box`, () => {
-        const l = sceneLayout(box, count);
+        // A short, wide stage drops the sentence and the line and uses a smaller button (see Scene).
+        const short = box.w >= COMPACT_BELOW && box.h < SHORT_BELOW;
+        const room = short ? { pitchH: 6, dockH: 62, lineH: 4 } : {};
+        const l = sceneLayout(box, count, room);
         const all = circles(l);
         // Faces never overlap each other or your own face.
         for (let i = 0; i < all.length; i++) {
@@ -34,7 +37,7 @@ describe('ring layout', () => {
           }
         }
         // Everything stays inside the scene, under the sentence at the top.
-        const pitch = box.w < COMPACT_BELOW ? PITCH_H_COMPACT : box.w < PITCH_ONE_LINE_FROM ? PITCH_H_TWO_LINES : PITCH_H;
+        const pitch = short ? 6 : box.w < COMPACT_BELOW ? PITCH_H_COMPACT : box.w < PITCH_ONE_LINE_FROM ? PITCH_H_TWO_LINES : PITCH_H;
         for (const c of all) {
           expect(c.x - c.r).toBeGreaterThanOrEqual(0);
           expect(c.x + c.r).toBeLessThanOrEqual(box.w);
@@ -43,19 +46,19 @@ describe('ring layout', () => {
         }
         expect(l.center.y - l.clockR).toBeGreaterThanOrEqual(pitch);
         // The line under the clock clears your face.
-        expect(l.center.y + l.clockR + (box.w < COMPACT_BELOW ? LINE_H_COMPACT : LINE_H)).toBeLessThanOrEqual(l.you.y - l.youR + 0.001);
+        expect(l.center.y + l.clockR + (short ? 4 : box.w < COMPACT_BELOW ? LINE_H_COMPACT : LINE_H)).toBeLessThanOrEqual(l.you.y - l.youR + 0.001);
         // The line fits between the faces at its height, and is wide enough for a short name.
-        const lineH = box.w < COMPACT_BELOW ? LINE_H_COMPACT : LINE_H;
+        const lineH = short ? 4 : box.w < COMPACT_BELOW ? LINE_H_COMPACT : LINE_H;
         const lineY = l.center.y + l.clockR + lineH / 2;
         for (const p of l.slots) {
           if (Math.abs(p.y - lineY) < l.faceR + lineH / 2) expect(Math.abs(p.x - l.center.x) - l.faceR).toBeGreaterThanOrEqual(l.lineW / 2);
         }
         // On anything as tall as a small phone the clock keeps a readable size and the line a name.
-        if (vh >= 640) {
+        if (vh >= 640 && !short) {
           expect(l.lineW).toBeGreaterThanOrEqual(120);
           expect(l.clockR).toBeGreaterThanOrEqual(64);
         }
-        expect(l.clockR).toBeGreaterThanOrEqual(48);
+        expect(l.clockR).toBeGreaterThanOrEqual(36);
         // The clock ring sits inside the ring of faces, and the middle seat inside the clock.
         for (const p of l.slots) {
           expect(Math.hypot(p.x - l.center.x, p.y - l.center.y)).toBeGreaterThanOrEqual(l.clockR + l.faceR);
@@ -65,7 +68,7 @@ describe('ring layout', () => {
         expect(l.faceR).toBeGreaterThanOrEqual(10);
         // Your face is 1.6 times the others and sits above the space kept for the button.
         expect(l.youR).toBeCloseTo(l.faceR * YOU_SCALE, 5);
-        expect(l.you.y + l.youR).toBeLessThanOrEqual(box.h - (box.w < COMPACT_BELOW ? DOCK_H_COMPACT : DOCK_H));
+        expect(l.you.y + l.youR).toBeLessThanOrEqual(box.h - (short ? 62 : box.w < COMPACT_BELOW ? DOCK_H_COMPACT : DOCK_H));
       });
     }
   }

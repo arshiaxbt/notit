@@ -109,19 +109,31 @@ export function formatShare(part: bigint, whole: bigint, frac = 2): string {
   return frac > 0 ? `${int}.${dec}%` : `${int}%`;
 }
 
-/** Shortens long account ids in the middle: "averyveryl…gname.testnet". */
-/** The one length account names are shortened to, everywhere. */
+/**
+ * The one way an account name is shortened, everywhere: the middle is cut and
+ * the end is kept, because the end is where two names differ ("…p460.testnet",
+ * "…p461.testnet"). In a very narrow place the ".testnet" goes first and the
+ * tail of the name stays, so two accounts can still be told apart.
+ */
 export const NAME_MAX = 20;
+/** The length used on a phone. */
+export const NAME_MAX_COMPACT = 16;
 
 export function shortAccount(id: string, max = NAME_MAX): string {
   if (id.length <= max) return id;
   const dot = id.lastIndexOf('.');
   const suffix = dot > 0 && id.length - dot <= 9 ? id.slice(dot) : '';
   const stem = suffix ? id.slice(0, dot) : id;
-  const keep = Math.max(4, max - suffix.length - 1);
-  const head = Math.ceil(keep * 0.6);
-  const tail = keep - head;
-  return `${stem.slice(0, head)}…${tail > 0 ? stem.slice(-tail) : ''}${suffix}`;
+  // Room for at least "abc…wxyz" beside the suffix; otherwise the suffix is dropped.
+  if (suffix && max - suffix.length - 1 >= 6) {
+    const keep = max - suffix.length - 1;
+    const tail = Math.ceil(keep * 0.5);
+    return `${stem.slice(0, keep - tail)}…${stem.slice(-tail)}${suffix}`;
+  }
+  if (stem.length <= max) return stem;
+  const keep = Math.max(4, max - 1);
+  const tail = Math.max(3, Math.ceil(keep * 0.6));
+  return `${stem.slice(0, Math.max(1, keep - tail))}…${stem.slice(-tail)}`;
 }
 
 /** Plain number with separators. */

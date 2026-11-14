@@ -1,8 +1,8 @@
 {
   "network": "testnet",
   "rpcUrls": [
-    "https://test.rpc.fastnear.com",
     "https://near-testnet.drpc.org",
+    "https://test.rpc.fastnear.com",
     "https://api.zan.top/near-testnet",
     "https://testnet-rpc.intea.rs"
   ],

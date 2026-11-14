@@ -1012,7 +1012,7 @@
   font-weight: 800;
   transform: rotate(-4deg);
 }
-.rule h3 {
+.rule h2 {
   font-size: var(--text-l);
   font-weight: 800;
   line-height: 1.2;
@@ -1246,7 +1246,7 @@
 .rule {
   align-items: center;
 }
-.rule h3 {
+.rule h2 {
   font-weight: 700;
   max-width: 44ch;
 }
@@ -1573,4 +1573,170 @@
 }
 .legend__swatch--dot {
   border-radius: 50%;
+}
+
+/* ---- numbers behind a closed disclosure: the sentence and the chart are the lab ---- */
+.numbers {
+  border-top: var(--border) solid var(--line);
+}
+.numbers > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+.numbers > summary::-webkit-details-marker {
+  display: none;
+}
+.numbers > summary::after {
+  content: '+';
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1;
+}
+.numbers[open] > summary::after {
+  content: '−';
+}
+/* tables fit the page: on a phone the columns that only add detail are left out */
+/* (if larger text ever makes a table wider than the page, its own box scrolls, not the page) */
+.tablewrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  table-layout: auto;
+}
+.table tbody th {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 619px) {
+  .col-wide {
+    display: none;
+  }
+  .table th,
+  .table td {
+    padding-left: var(--space-1);
+    padding-right: var(--space-1);
+  }
+  .table th:first-child,
+  .table td:first-child {
+    padding-left: 0;
+  }
+  .table th:last-child,
+  .table td:last-child {
+    padding-right: 0;
+  }
+}
+.legend__swatch--asleep {
+  height: 6px;
+  background: var(--muted);
+}
+
+/* ---- touch: every control has a 44 px hit area on a phone, without growing the type ---- */
+@media (max-width: 760px), (pointer: coarse) {
+  .mode__opt,
+  .btn,
+  .seg__opt,
+  .field select,
+  .chainbar__pick select,
+  .subtabs__tab {
+    min-height: 44px;
+  }
+  .iconbtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .top__home {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .demobar .btn {
+    min-height: 44px;
+  }
+  .field input[type='range'] {
+    min-height: 44px;
+  }
+  .extlink,
+  .linkbtn,
+  .foot a,
+  .act__link,
+  .acct__out {
+    position: relative;
+  }
+  .extlink::after,
+  .linkbtn::after,
+  .foot a::after,
+  .act__link::after,
+  .acct__out::after {
+    content: '';
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    top: 50%;
+    height: 44px;
+    translate: 0 -50%;
+  }
+  .chainbar__row {
+    row-gap: var(--space-4);
+  }
+}
+
+/* ---- the narrowest phones (320 px) ---- */
+@media (max-width: 359px) {
+  .top__bar {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    gap: 2px var(--space-2);
+  }
+  .logo {
+    font-size: 1.25rem;
+  }
+  .mode__opt {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+  .top__tools {
+    gap: var(--space-1);
+  }
+  /* no room for the name beside the ribbon: "Sign out" stays, the name is in its title */
+  .acct__id {
+    display: none;
+  }
+  .column {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+  .table thead th {
+    font-size: 0.72rem;
+  }
+}
+
+/* ---- larger text: the header wraps instead of pushing the page sideways ---- */
+@media (max-width: 760px) {
+  .top__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .top__tools {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+  .top__home {
+    order: 1;
+  }
+  .top__tools {
+    order: 2;
+    margin-left: auto;
+  }
+  .tabs {
+    order: 3;
+    flex: 1 0 100%;
+  }
 }

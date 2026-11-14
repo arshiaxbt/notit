@@ -7,7 +7,7 @@ import type { Mode } from '../Header';
 import { useFlash } from '../ui';
 import { ChainBar } from './Chain';
 import { HeroWall, RoundStrip } from './Rounds';
-import { Figures, Scene, StageShell } from './Scene';
+import { Figures, LiveProvider, Scene, StageShell } from './Scene';
 
 interface Props {
   game: Game;
@@ -95,22 +95,27 @@ export function Play({ game, mode, demo, chain, onRestartDemo, onUseDemo, onShow
     );
   }
 
+  // The demo can run a three-minute round in ten seconds; the clock shows the seconds you actually wait.
+  const scale = demo ? Math.max(1, Number(snap.config.roundNs) / 1e9 / demo.roundSeconds()) : 1;
+
   return (
     <div className="play">
-      <Scene game={game} snap={snap} chain={chain} flash={flash} crowd={crowd} />
+      <LiveProvider game={game}>
+        <Scene game={game} snap={snap} chain={chain} flash={flash} crowd={crowd} scale={scale} onUseDemo={onUseDemo} />
 
-      <div className="column">
-        {game.error && (
-          <p className="notice notice--inline" role="status">
-            Network trouble. Showing the last known state.
-          </p>
-        )}
-        <Figures game={game} snap={snap} flash={flash} />
-        <RoundStrip snap={snap} />
-        <HeroWall snap={snap} />
-        {demo && <DemoBar demo={demo} game={game} onRestart={onRestartDemo} />}
-        {chain && <ChainBar chain={chain} />}
-      </div>
+        <div className="column">
+          {game.error && (
+            <p className="notice notice--inline" role="status">
+              Network trouble. Showing the last known state.
+            </p>
+          )}
+          <Figures snap={snap} flash={flash} />
+          <RoundStrip snap={snap} />
+          <HeroWall snap={snap} />
+          {demo && <DemoBar demo={demo} game={game} onRestart={onRestartDemo} />}
+          {chain && <ChainBar chain={chain} />}
+        </div>
+      </LiveProvider>
     </div>
   );
 }

@@ -44,13 +44,22 @@ export interface SceneLayout {
 export const MAX_FACES = 24;
 export const MAX_FACES_COMPACT = 12;
 /** Height kept free at the bottom of the stage for the one button and the line under it. */
-export const DOCK_H = 100;
+export const DOCK_H = 112;
 export const DOCK_H_COMPACT = 112;
 /** Height kept free at the top of the stage for the one sentence. */
 export const PITCH_H = 46;
 export const PITCH_H_COMPACT = 58;
 export const PITCH_H_TWO_LINES = 68;
 export const PITCH_ONE_LINE_FROM = 800;
+/** A wide stage shorter than this (a phone on its side, a heavily zoomed window) drops the sentence and the line. */
+export const SHORT_BELOW = 360;
+
+/** What the stage measures of itself and passes in, instead of the defaults. */
+export interface Room {
+  pitchH?: number;
+  dockH?: number;
+  lineH?: number;
+}
 /** Below this many faces the ring is drawn tighter, so it still reads as a ring. */
 export const SPARSE_BELOW = 10;
 /** Below this stage width the compact layout is used. */
@@ -99,12 +108,12 @@ export function pointsOnArc(c: Point, rx: number, ry: number, from: number, to: 
 }
 
 /** Room under the clock for the one line that names It. */
-export const LINE_H = 36;
+export const LINE_H = 50;
 export const LINE_H_COMPACT = 34;
 const CLOCK_MIN = 72;
 const CLOCK_SMALL = 62;
 
-function fit(box: Box, holders: number, maxFace: number): SceneLayout {
+function fit(box: Box, holders: number, maxFace: number, room: Room): SceneLayout {
   const compact = box.w < COMPACT_BELOW;
   const cap = compact ? MAX_FACES_COMPACT : MAX_FACES;
   const shown = Math.max(0, Math.min(holders, cap));
@@ -112,10 +121,10 @@ function fit(box: Box, holders: number, maxFace: number): SceneLayout {
   const n = shown + (extra > 0 ? 1 : 0);
   const sparse = n < SPARSE_BELOW;
   const pad = compact ? 10 : 20;
-  const dockH = compact ? DOCK_H_COMPACT : DOCK_H;
+  const dockH = room.dockH ?? (compact ? DOCK_H_COMPACT : DOCK_H);
   // The sentence takes two lines on anything narrower than a laptop.
-  const pitchH = compact ? PITCH_H_COMPACT : box.w < PITCH_ONE_LINE_FROM ? PITCH_H_TWO_LINES : PITCH_H;
-  const lineH = compact ? LINE_H_COMPACT : LINE_H;
+  const pitchH = room.pitchH ?? (compact ? PITCH_H_COMPACT : box.w < PITCH_ONE_LINE_FROM ? PITCH_H_TWO_LINES : PITCH_H);
+  const lineH = room.lineH ?? (compact ? LINE_H_COMPACT : LINE_H);
   const cx = box.w / 2;
 
   let faceR = maxFace;
@@ -160,7 +169,7 @@ function fit(box: Box, holders: number, maxFace: number): SceneLayout {
   const center = { x: cx, y: cy };
   const reach = Math.min(rx, ry);
   // About 40% of the crowd, inside the ring of faces, and leaving room for the line above your face.
-  const clockR = Math.max(48, Math.min(clamp(reach * 0.54, 78, 150), reach - faceR - 12, ry - youR - lineH));
+  const clockR = Math.max(36, Math.min(clamp(reach * 0.54, 78, 150), reach - faceR - 12, ry - youR - lineH));
   // How wide that line may be: it runs between the faces that sit at its height.
   const lineY = cy + clockR + lineH / 2;
   let lineW = box.w - 2 * pad;
@@ -189,19 +198,19 @@ function fit(box: Box, holders: number, maxFace: number): SceneLayout {
 }
 
 /** `holders` is the number of faces on the ring: everyone but you and whoever sits in the middle. */
-export function sceneLayout(box: Box, holders: number): SceneLayout {
+export function sceneLayout(box: Box, holders: number, room: Room = {}): SceneLayout {
   const compact = box.w < COMPACT_BELOW;
   const sparse = Math.min(holders, compact ? MAX_FACES_COMPACT + 1 : MAX_FACES) < SPARSE_BELOW;
   let maxFace = compact ? (sparse ? 24 : 20) : sparse ? 32 : 30;
-  let layout = fit(box, holders, maxFace);
+  let layout = fit(box, holders, maxFace, room);
   // On a short stage the faces give way first, then the clock a little, then the faces again.
   while (layout.clockR < CLOCK_MIN && maxFace > 18) {
     maxFace -= 2;
-    layout = fit(box, holders, maxFace);
+    layout = fit(box, holders, maxFace, room);
   }
   while (layout.clockR < CLOCK_SMALL && maxFace > 14) {
     maxFace -= 2;
-    layout = fit(box, holders, maxFace);
+    layout = fit(box, holders, maxFace, room);
   }
   return layout;
 }
@@ -228,6 +237,7 @@ export function stableOrder(prev: string[], ids: string[]): string[] {
 /** The stage's box for a viewport, following the same rules as the stylesheet. Used by tests. */
 export function sceneBoxFor(viewportW: number, viewportH: number): Box {
   // header: 95 px on a desktop, 134 px on a phone
-  if (viewportW < COMPACT_BELOW) return { w: viewportW, h: clamp(viewportH - 134, 440, 720) };
-  return { w: viewportW, h: clamp(viewportH - 95 - 85, 480, 760) };
+  if (viewportW < COMPACT_BELOW) return { w: viewportW, h: clamp(viewportH - 127, 380, 720) };
+  if (viewportH <= 520) return { w: viewportW, h: Math.max(250, viewportH - 113) };
+  return { w: viewportW, h: clamp(viewportH - 97 - 85, 360, 760) };
 }

@@ -53,9 +53,11 @@ export function preferFirst<T extends object>(endpoints: T[], options: { coolOff
   if (endpoints.length === 0) throw new Error('At least one RPC endpoint is needed');
   const first = endpoints[0]!;
   if (endpoints.length === 1) return first;
-  const coolOffMs = options.coolOffMs ?? 15_000;
+  // A refused endpoint rests for a minute; refused again on waking, twice as long (up to five minutes).
+  const coolOffMs = options.coolOffMs ?? 60_000;
   const now = options.now ?? (() => Date.now());
   const restingUntil = endpoints.map(() => 0);
+  const refusals = endpoints.map(() => 0);
   return new Proxy(first, {
     get(target, prop, receiver) {
       const value: unknown = Reflect.get(target, prop, receiver);
@@ -68,11 +70,15 @@ export function preferFirst<T extends object>(endpoints: T[], options: { coolOff
         let lastError: unknown;
         for (const i of order) {
           try {
-            return await (endpoints[i] as Record<PropertyKey, (...a: unknown[]) => unknown>)[prop]!(...args);
+            const answer = await (endpoints[i] as Record<PropertyKey, (...a: unknown[]) => unknown>)[prop]!(...args);
+            refusals[i] = 0;
+            return answer;
           } catch (e) {
             lastError = e;
             if (!isTransportError(e)) throw e;
-            restingUntil[i] = now() + coolOffMs;
+            // A rate limit is an expected event on public endpoints: step aside quietly.
+            restingUntil[i] = now() + Math.min(coolOffMs * 2 ** refusals[i]!, Math.max(coolOffMs, 300_000));
+            refusals[i]! += 1;
           }
         }
         throw lastError;
@@ -86,11 +92,11 @@ export function loadProvider(rpcUrls: string[]): Promise<RpcProvider> {
   const key = rpcUrls.join(',');
   let p = providers.get(key);
   if (!p) {
-    // A refusal is retried once, quickly, before the next endpoint gets the call.
+    // A refusal is not retried on the same endpoint: the next one gets the call at once.
     // (The library default is twelve attempts with growing waits, which stalls the UI
     // and keeps knocking on an endpoint that is rate-limiting.)
     p = loadNearApi().then((api) =>
-      preferFirst(rpcUrls.map((url) => new api.JsonRpcProvider({ url }, { retries: 2, wait: 300, backoff: 2 }))),
+      preferFirst(rpcUrls.map((url) => new api.JsonRpcProvider({ url }, { retries: 1, wait: 200, backoff: 2 }))),
     );
     p.catch(() => providers.delete(key));
     providers.set(key, p);
@@ -160,13 +166,9 @@ export function randomGuestId(network: string, random: (n: number) => Uint8Array
 
 /** What to tell someone when the faucet will not make an account, by HTTP status. */
 export function faucetMessage(status: number): string {
-  if (status === 429) {
-    return 'The testnet faucet is busy and is not handing out new accounts right now. Try again in a minute, connect a wallet, or use Demo mode.';
-  }
-  if (status >= 500) {
-    return `The testnet faucet is having trouble (HTTP ${status}). Try again in a minute, connect a wallet, or use Demo mode.`;
-  }
-  return `The testnet faucet refused to create an account (HTTP ${status}). Try again, connect a wallet, or use Demo mode.`;
+  if (status === 429) return 'The faucet is busy.';
+  if (status >= 500) return 'The faucet is down.';
+  return 'The faucet refused.';
 }
 
 export class FaucetError extends Error {
@@ -199,8 +201,8 @@ export async function createGuestAccount(config: ChainConfig, fetchImpl: typeof 
   } catch (e) {
     throw new Error(
       controller.signal.aborted
-        ? 'The testnet faucet took too long to answer. Try again in a minute, connect a wallet, or use Demo mode.'
-        : 'The testnet faucet could not be reached. Check your connection and try again, or use Demo mode.',
+        ? 'The faucet did not answer.'
+        : 'The faucet could not be reached.',
       { cause: e },
     );
   } finally {

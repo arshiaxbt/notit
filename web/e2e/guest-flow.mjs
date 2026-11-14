@@ -66,11 +66,11 @@ try {
   await page.getByRole('button', { name: /Play as guest|Continue as guest/ }).click();
   log('clicked "Play as guest"');
   await page.waitForFunction(
-    () => /1,000\.00/.test(document.querySelector('.figs__item dd')?.textContent ?? '') || document.querySelector('.act__alert') !== null,
+    () => /1,000\.00/.test(document.querySelector('.figs__item dd')?.textContent ?? '') || document.querySelector('.act__say, .act__alert') !== null,
     null,
     { timeout: 150_000 },
   );
-  if (await page.locator('.act__alert').count()) {
+  if (await page.locator('.act__say, .act__alert').count()) {
     throw new Error(`guest sign-up failed: ${await text('.guest')}`);
   }
   log(`guest ready in ${((Date.now() - started) / 1000).toFixed(1)}s:`, await text('.acct__id'), '| balance', await text('.figs__item dd .sr-only'));
@@ -96,7 +96,7 @@ try {
     await page.waitForFunction(
       () =>
         document.querySelector('.stamp') !== null ||
-        document.querySelector('.act__alert') !== null,
+        document.querySelector('.act__say, .act__alert') !== null,
       null,
       { timeout: 60_000 },
     );

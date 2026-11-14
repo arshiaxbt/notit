@@ -36,6 +36,7 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
   const [picked, setPicked] = useState<number | null>(null);
   const saved = cells.filter((c) => c.kind === 'saved').length;
   const collapsed = cells.filter((c) => c.kind === 'collapsed').length;
+  const asleep = cells.filter((c) => c.kind === 'dormant').length;
   const active = picked !== null ? cells.find((c) => c.round === picked) ?? null : null;
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (cells.length === 0) return;
@@ -52,11 +53,11 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
   // how to pick is said to assistive technology in the group's label, not on screen.
   let caption = '';
   if (active?.kind === 'saved') {
-    caption = `#${formatInt(active.round)} ${active.hero === me ? 'you' : shortAccount(active.hero)} did it · ${formatCountdown(active.msLeft)} left · burned ${amount(active.cost)}`;
+    caption = `#${formatInt(active.round)} saved by ${active.hero === me ? 'you' : shortAccount(active.hero)} · ${formatCountdown(active.msLeft)} left · burned ${amount(active.cost)}`;
   } else if (active?.kind === 'collapsed') {
-    caption = `#${formatInt(active.round)} nobody · everyone paid ${active.it === me ? 'you' : shortAccount(active.it)}`;
+    caption = `#${formatInt(active.round)} unsaved · paid to ${active.it === me ? 'you' : shortAccount(active.it)}`;
   } else if (active) {
-    caption = `#${formatInt(active.round)} nobody · no charge`;
+    caption = `#${formatInt(active.round)} unsaved · asleep`;
   }
 
   return (
@@ -72,6 +73,11 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
           <li>
             <span className="legend__swatch legend__swatch--collapsed" aria-hidden="true" /> Unsaved <b>{collapsed}</b>
           </li>
+          {asleep > 0 && (
+            <li>
+              <span className="legend__swatch legend__swatch--asleep" aria-hidden="true" /> Asleep <b>{asleep}</b>
+            </li>
+          )}
         </ul>
       }
     >
@@ -80,7 +86,7 @@ export function RoundStrip({ snap }: { snap: GameSnapshot }) {
         role="group"
         tabIndex={0}
         title="Point at a round for details"
-        aria-label={`Last ${cells.length} rounds, oldest first: ${saved} saved, ${collapsed} unsaved and paid to It. Use the left and right arrow keys to step through rounds.`}
+        aria-label={`Last ${cells.length} rounds, oldest first: ${saved} saved, ${collapsed} unsaved and paid to It, ${asleep} unsaved while asleep. Use the left and right arrow keys to step through rounds.`}
         onKeyDown={onKey}
         onMouseLeave={() => setPicked(null)}
         onBlur={() => setPicked(null)}
@@ -114,11 +120,11 @@ export function HeroWall({ snap }: { snap: GameSnapshot }) {
   );
 
   return (
-    <Card labelId="wall-title" className="wall" title={<span className="sr-only">Volunteers</span>}>
+    <Card labelId="wall-title" className="wall" title="Who volunteered">
       {rows.length === 0 ? (
         <p className="empty">Nobody yet.</p>
       ) : (
-        <div className="tablewrap">
+        <div className="tablewrap" tabIndex={0} role="region" aria-label="Table of who volunteered">
           <table className="table">
             <thead>
               <tr>

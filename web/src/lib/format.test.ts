@@ -116,6 +116,18 @@ describe('percentages', () => {
 });
 
 describe('shortAccount', () => {
+  it('keeps two similar accounts apart at every length, down to the narrowest place', () => {
+    const bots = ['notit-undertaker-p460.testnet', 'notit-freerider-p461.testnet', 'notit-freerider-p462.testnet', 'notit-sniper-p463.testnet'];
+    const guests = ['guest-e2ff2ca8.testnet', 'guest-0df6d80f.testnet', 'guest-c32cda3f.testnet'];
+    for (const max of [20, 16, 12, 9, 7, 5]) {
+      for (const group of [bots, guests]) {
+        const short = group.map((id) => shortAccount(id, max));
+        expect(new Set(short).size, `${max}: ${short.join(' ')}`).toBe(group.length);
+        for (const sName of short) expect(sName.length).toBeLessThanOrEqual(Math.max(max, 5));
+      }
+    }
+  });
+
   it('keeps short ids', () => {
     expect(shortAccount('alice.testnet')).toBe('alice.testnet');
   });

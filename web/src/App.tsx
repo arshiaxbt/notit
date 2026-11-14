@@ -12,6 +12,7 @@ import { useSession } from './hooks/useSession';
 import type { ChainUi } from './hooks/useSession';
 import { useTheme } from './hooks/useTheme';
 import { Lab } from './lab/Lab';
+import { queryGet, querySet } from './lib/url';
 import { Rules } from './rules/Rules';
 
 const TABS: Tab[] = ['play', 'lab', 'rules'];
@@ -23,14 +24,13 @@ function tabFromHash(): Tab {
 
 /** Testnet when a contract is configured, unless the address says `?mode=demo`. */
 function initialMode(testnetAvailable: boolean): Mode {
-  const asked = new URLSearchParams(window.location.search).get('mode');
-  if (asked === 'demo' || !testnetAvailable) return 'demo';
+  if (queryGet('mode') === 'demo' || !testnetAvailable) return 'demo';
   return 'testnet';
 }
 
 function newDemo(roundSeconds?: number): MockClient {
   // `?crowd=quiet` fills the demo with holders who never volunteer: the quickest way to watch unsaved rounds.
-  const quiet = new URLSearchParams(window.location.search).get('crowd') === 'quiet';
+  const quiet = queryGet('crowd') === 'quiet';
   const crowd = quiet ? DEFAULT_CROWD.map((b) => ({ ...b, strategy: STRATEGIES.freeRider })) : undefined;
   // The played-in history is the same for everyone; what happens next is not.
   return new MockClient({ roundSeconds: roundSeconds ?? (quiet ? 10 : undefined), crowd, liveSeed: Date.now() & 0x7fffffff });
@@ -42,7 +42,14 @@ export function App() {
   const [demo, setDemo] = useState<MockClient>(() => newDemo());
   // Testnet is offered when a contract is configured (deployments.json or
   // VITE_CONTRACT_ID). The session does nothing until Testnet mode is shown.
-  const session = useMemo(() => (chainConfig ? new ChainSession(chainConfig) : null), []);
+  const session = useMemo(() => {
+    if (!chainConfig) return null;
+    const made = new ChainSession(chainConfig);
+    // `?contract=` picks the deployment (Fast or Live), so a shared link opens the same game.
+    const asked = queryGet('contract');
+    if (asked) made.selectContract(asked);
+    return made;
+  }, []);
   const sessionState = useSession(session);
   const [mode, setMode] = useState<Mode>(() => initialMode(session !== null));
   const onTestnet = mode === 'testnet' && session !== null && sessionState !== null;
@@ -55,6 +62,13 @@ export function App() {
   useEffect(() => {
     if (onTestnet) session.start();
   }, [onTestnet, session]);
+
+  // The mode and the deployment are part of the address.
+  const deploymentId = sessionState?.deployment.id ?? null;
+  useEffect(() => {
+    querySet('mode', mode);
+    querySet('contract', mode === 'testnet' && deploymentId && deploymentId !== chainConfig?.contracts[0]?.id ? deploymentId : null);
+  }, [mode, deploymentId]);
 
   // A new account, or tokens that just arrived: fetch straight away.
   const version = sessionState?.version ?? 0;

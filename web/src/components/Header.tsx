@@ -3,6 +3,7 @@ import type { KeyboardEvent } from 'react';
 import type { ChainUi } from '../hooks/useSession';
 import type { Theme } from '../hooks/useTheme';
 import { shortAccount } from '../lib/format';
+import { useNameMax } from './ui';
 
 export type Tab = 'play' | 'lab' | 'rules';
 export type Mode = 'demo' | 'testnet';
@@ -37,6 +38,7 @@ export function Logo() {
 }
 
 export function Header({ tab, onTab, mode, onMode, testnetAvailable, network, chain, theme, onToggleTheme }: Props) {
+  const nameMax = useNameMax();
   const account = chain?.state.account ?? null;
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
@@ -98,7 +100,7 @@ export function Header({ tab, onTab, mode, onMode, testnetAvailable, network, ch
           <div className="acct">
             <span className="acct__id" title={account.id}>
               <span className="acct__kind">{account.kind === 'guest' ? 'Guest' : 'Wallet'}</span>
-              {shortAccount(account.id)}
+              {shortAccount(account.id, nameMax)}
             </span>
             <button type="button" className="acct__out" onClick={() => void chain.session.signOut()}>
               Sign out

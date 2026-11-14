@@ -150,6 +150,12 @@ function slowKey(state: StateView, historyLen: number, accountId: string | null,
 }
 
 /** One poll. Pass the previous snapshot to reuse the slower views when nothing they depend on has changed. */
+/** True if `next` describes an earlier moment of the same game than `shown`. */
+export function isBehind(shown: GameSnapshot, next: GameSnapshot): boolean {
+  if (next.state.round < shown.state.round) return true;
+  return next.state.round === shown.state.round && shown.state.saved && !next.state.saved;
+}
+
 export async function fetchSnapshot(client: GameClient, config: ConfigView, prev: GameSnapshot | null = null): Promise<GameSnapshot> {
   const accountId = client.accountId();
   // One after another, not all at once: public RPC endpoints refuse bursts.
@@ -210,6 +216,11 @@ export function useGame(client: GameClient, options: UseGameOptions = {}): Game 
         const next = await fetchSnapshot(forClient, configRef.current, snapRef.current);
         // Ignore answers for another client, or older than one already shown.
         if (clientRef.current !== forClient || mySeq < applied.current) return;
+        // Public nodes are not all at the same block. An answer from one that is behind (an
+        // earlier round, or this round not yet saved when we have already seen it saved)
+        // must not undo what is on screen.
+        const shown = snapRef.current;
+        if (shown && isBehind(shown, next)) return;
         applied.current = mySeq;
         // A view answers with the timestamp of a block that is already a little
         // old, by a different amount each time. The largest recent offset is
@@ -304,26 +315,49 @@ export function useGame(client: GameClient, options: UseGameOptions = {}): Game 
     return () => window.clearTimeout(t);
   }, [snapshot, client, pollMs, refresh, nowNs]);
 
+  const busy = useRef(false);
   const act = useCallback(
     async (action: Action, guard?: VolunteerGuard): Promise<TxResult | null> => {
-      if (pending) return null;
+      // A ref, not the state: two clicks in the same frame must not send twice.
+      if (busy.current) return null;
+      busy.current = true;
+      const forClient = client;
       setPending(action);
       try {
         const res = action === 'volunteer' && guard ? await client.volunteer(guard) : await client.claim();
-        if (!res.ok) setNotice({ id: ++eventId.current, text: res.message, gentle: isGentle(res.code) });
-        else setNotice(null);
+        if (res.ok) {
+          // The transaction is final, but the node we read from may be a block behind. Stay
+          // "in flight" until one snapshot shows the result, so the button, the seat, who is It
+          // and every figure change together and nothing is half-new.
+          const me = client.accountId();
+          const landed = (snap: GameSnapshot | null) => {
+            if (!snap) return false;
+            if (action === 'claim') return !!snap.account && snap.account.claimed && snap.account.balance > 0n;
+            return snap.state.round > (guard?.round ?? 0) || (snap.state.saved && snap.state.hero === me);
+          };
+          for (let attempt = 0; attempt < 12 && clientRef.current === forClient; attempt++) {
+            inFlight.current = null;
+            await refresh();
+            if (landed(snapRef.current)) break;
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+          setNotice(null);
+        } else {
+          setNotice({ id: ++eventId.current, text: res.message, gentle: isGentle(res.code) });
+          inFlight.current = null;
+          await refresh();
+        }
         if (res.txHash) setLastTx({ id: ++eventId.current, hash: res.txHash, action, ok: res.ok });
-        inFlight.current = null;
-        await refresh();
         return res;
       } catch (e) {
         setNotice({ id: ++eventId.current, text: e instanceof Error ? e.message : 'That did not go through.', gentle: false });
         return null;
       } finally {
+        busy.current = false;
         setPending(null);
       }
     },
-    [client, pending, refresh],
+    [client, refresh],
   );
 
   const claim = useCallback(() => act('claim'), [act]);
