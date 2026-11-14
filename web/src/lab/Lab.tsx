@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
-import { FAST } from '@notit/engine';
 import type { MixedCrowdResult, WhoPaysResult } from '@notit/engine';
 import { XYChart } from '../components/charts/XYChart';
 import type { Tick } from '../components/charts/XYChart';
 import { Card, cls } from '../components/ui';
-import { formatInt, formatPpm, formatToken } from '../lib/format';
-import { PRESETS, SWEEP, nobodyPaysFrom, theoryFailure } from './jobs';
+import { formatInt, formatToken } from '../lib/format';
+import { PRESETS, SWEEP, theoryFailure } from './jobs';
 import type { BystanderPreset, BystanderRow, PathResult } from './jobs';
 import { runInBackground } from './runner';
 
@@ -69,7 +68,7 @@ function Slider({
   valueText?: string;
 }) {
   return (
-    <div className="field">
+    <div className="field" title={help}>
       <label className="field__label" htmlFor={id}>
         <span>{label}</span>
         <span className="field__value">{display}</span>
@@ -84,7 +83,6 @@ function Slider({
         aria-valuetext={valueText ?? display}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-      {help && <span className="field__help">{help}</span>}
     </div>
   );
 }
@@ -105,7 +103,7 @@ function Select<T extends string | number>({
   onChange(v: T): void;
 }) {
   return (
-    <div className="field">
+    <div className="field" title={help}>
       <label className="field__label" htmlFor={id}>
         <span>{label}</span>
       </label>
@@ -123,7 +121,6 @@ function Select<T extends string | number>({
           </option>
         ))}
       </select>
-      {help && <span className="field__help">{help}</span>}
     </div>
   );
 }
@@ -132,10 +129,10 @@ function Status({ running, progress, error }: { running: boolean; progress?: num
   return (
     <div className="controls__status" role="status" aria-live="polite">
       {error ? (
-        `Something went wrong: ${error}`
+        `Failed: ${error}`
       ) : running ? (
         <>
-          Simulating in the background…
+          Simulating…
           {progress !== undefined && (
             <div className="progress" aria-hidden="true">
               <span style={{ width: `${Math.round(progress * 100)}%` }} />
@@ -143,7 +140,7 @@ function Status({ running, progress, error }: { running: boolean; progress?: num
           )}
         </>
       ) : (
-        'Done. Runs the real rules engine, in your browser.'
+        'Done'
       )}
     </div>
   );
@@ -242,7 +239,6 @@ function Bystander() {
   }, [n, trials, preset, seed]);
 
   const picked = rows.find((r) => r.n === n) ?? null;
-  const limit = nobodyPaysFrom();
   const snapXs = useMemo(() => rows.map((r) => r.n), [rows]);
   const pathReady = path !== null && path.n === n;
   const supplyTicks = useMemo(() => {
@@ -255,76 +251,24 @@ function Bystander() {
     }
     return niceTicks(lo, hi);
   }, [path]);
-  const firstDormant = path?.points.find((p) => p.outcome === 'dormant')?.round ?? null;
   const roundTicks: Tick[] = useMemo(() => {
     const r = path?.rounds ?? trials;
     return [1, r / 4, r / 2, (3 * r) / 4, r].map((v) => ({ v: Math.max(1, Math.round(v)), label: formatInt(Math.max(1, Math.round(v))) }));
   }, [path, trials]);
 
-  let reading: ReactNode;
-  if (!picked) {
-    reading = <p>Running the first rounds…</p>;
-  } else if (preset === 'equilibrium') {
-    reading = (
-      <>
-        <p>
-          With <b>{n} people</b> who could do it, nobody did in <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)}{' '}
-          rounds. The theory says {pct(picked.theory)}.
-        </p>
-        <p>
-          Each extra person is one more who might step up, but everyone knows that, and leans on the others a little
-          more. The cost is also a share of the whole supply, so it grows against each person’s own stake. From about{' '}
-          {limit} players, the cheapest possible save costs more than a collapse would take from any one of them, and
-          nobody volunteers at all.
-        </p>
-      </>
-    );
-  } else if (preset === 'snipers') {
-    reading = (
-      <>
-        <p>
-          With <b>{n} snipers</b>, nobody saved the round in <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)}{' '}
-          rounds.
-        </p>
-        <p>
-          Here everyone always tries, so a round only fails when every single try lands late. More people makes that less
-          likely: the opposite of the theory curve, which assumes people hold back because others might act.
-        </p>
-      </>
-    );
-  } else if (preset === 'altruists') {
-    reading = (
-      <>
-        <p>
-          With <b>{n} occasional altruists</b>, nobody stepped up in <b>{pct(picked.simulated)}</b> of{' '}
-          {formatInt(picked.trials)} rounds.
-        </p>
-        <p>
-          If people act on habit instead of weighing the others, a bigger crowd is simply safer. The dots fall where the
-          theory line rises. The bystander effect needs people who reason about each other.
-        </p>
-      </>
-    );
-  } else {
-    reading = (
-      <>
-        <p>
-          With <b>{n} {preset === 'throne' ? 'throne-aware players' : 'rule followers'}</b>, nobody saved the round in{' '}
-          <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds.
-        </p>
-        <p>
-          These players do not gamble on each other. The first one for whom the falling cost is worth it pays, every
-          time, so there is no gradual bystander effect: only a cliff where the crowd is so large that the cost is never
-          worth it to anyone
-          {preset === 'throne' ? ', and it comes later because being It has value too.' : ` (about ${limit} players).`}
-        </p>
-      </>
-    );
-  }
+  // One sentence: the number for the chosen crowd, next to what the theory says.
+  const reading: ReactNode = !picked ? (
+    <p>Simulating…</p>
+  ) : (
+    <p>
+      With <b>{n}</b> players nobody stepped up in <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds; the theory
+      says {pct(picked.theory)}.
+    </p>
+  );
 
   return (
     <div className="lab__grid">
-      <Card labelId="by-controls" title="Set up the crowd" className="controls">
+      <Card labelId="by-controls" title="Crowd" className="controls">
         <Slider
           id="by-n"
           label="Crowd size"
@@ -338,31 +282,28 @@ function Bystander() {
         />
         <Select<number>
           id="by-trials"
-          label="Rounds to simulate"
+          label="Rounds"
           value={trials}
-          options={[200, 500, 1000, 2000].map((v) => ({ value: v, label: `${formatInt(v)} rounds per crowd size` }))}
+          options={[200, 500, 1000, 2000].map((v) => ({ value: v, label: `${formatInt(v)} rounds` }))}
           onChange={setTrials}
           help="More rounds, less noise, a little more waiting."
         />
         <Select<BystanderPreset>
           id="by-preset"
-          label="How the crowd behaves"
+          label="Behaviour"
           value={preset}
           options={(Object.keys(PRESETS) as BystanderPreset[]).map((k) => ({ value: k, label: PRESETS[k].label }))}
           onChange={setPreset}
           help={PRESETS[preset].blurb}
         />
         <button type="button" className="btn btn--ghost" onClick={() => setSeed((s) => s + 97)}>
-          Shuffle the dice
+          Reshuffle
         </button>
         <Status running={running} progress={progress} error={error} />
       </Card>
 
       <div className="lab__results">
-        <div className="reading">
-          <h3>What this shows</h3>
-          {reading}
-        </div>
+        <div className="reading">{reading}</div>
 
         <Card labelId="by-chart" title="Rounds nobody saved, by crowd size">
           <XYChart
@@ -441,26 +382,18 @@ function Bystander() {
                 }}
               />
               <ul className="figures" style={{ marginTop: 'var(--space-3)' }}>
-                <Figure label="Saved" value={formatInt(path.saved)} note={pct(path.saved / Math.max(1, path.rounds))} />
-                <Figure label="Unsaved, paid to It" value={formatInt(path.collapsed)} note={`${tokens(path.totalPaid)} NOTIT moved to It`} />
-                <Figure label="Unsaved, dormant" value={formatInt(path.dormant)} note="nothing charged" />
-                <Figure label="Burned by volunteers" value={tokens(path.totalBurned)} note={`supply ${tokens(path.supplyStart)} → ${tokens(path.supplyEnd)}`} />
+                <Figure label="Saved" value={formatInt(path.saved)} />
+                <Figure label="Unsaved, paid It" value={formatInt(path.collapsed)} />
+                <Figure label="Unsaved, dormant" value={formatInt(path.dormant)} />
+                <Figure label="Burned" value={tokens(path.totalBurned)} />
               </ul>
-              <p className="field__help" style={{ marginTop: 'var(--space-3)' }}>
-                One game played straight through with the same crowd. A save burns tokens, so the supply steps down. An
-                unsaved round moves tokens to It and leaves the supply as it was. The vertical axis is zoomed in to show
-                the steps.
-                {firstDormant !== null && path.dormant > path.rounds * 0.2
-                  ? ` From round ${formatInt(firstDormant)} this crowd let the game go dormant: after 8 charged rounds in a row nothing more is at stake, and players who only weigh the cut never wake it.`
-                  : ''}
-              </p>
             </>
           ) : (
             <p className="empty">Simulating…</p>
           )}
         </Card>
 
-        <Card labelId="by-table" title="Rounds nobody saved: the numbers" aside={<span className="card__note">{formatInt(trials)} rounds per row</span>}>
+        <Card labelId="by-table" title="Numbers">
           <div className="tablewrap">
             <table className="table">
               <thead>
@@ -493,10 +426,6 @@ function Bystander() {
               </tbody>
             </table>
           </div>
-          <p className="field__help" style={{ marginTop: 'var(--space-2)' }}>
-            “One acts” is the chance that any single player volunteers. It and “Theory” are the equilibrium values for
-            players who weigh the cost against the {formatPpm(FAST.cutPpm)} cut and ignore the value of becoming It.
-          </p>
         </Card>
       </div>
     </div>
@@ -577,14 +506,10 @@ function WhoPays() {
   );
 
   const myopic = result?.runs.find((r) => r.strategy === 'rationalTimer') ?? result?.runs[0] ?? null;
-  const aware = result?.runs.find((r) => r.strategy === 'throneAware') ?? null;
-  const coldMyopic = result?.coldStart.find((r) => r.strategy === 'rationalTimer') ?? null;
-  const coldAware = result?.coldStart.find((r) => r.strategy === 'throneAware') ?? null;
-  const same = !!myopic && !!aware && myopic.totalBurned === aware.totalBurned && myopic.savedShare === aware.savedShare;
 
   return (
     <div className="lab__grid">
-      <Card labelId="wp-controls" title="Set up the holders" className="controls">
+      <Card labelId="wp-controls" title="Holders" className="controls">
         <Slider
           id="wp-holders"
           label="Holders"
@@ -599,13 +524,13 @@ function WhoPays() {
         />
         <Select<number>
           id="wp-rounds"
-          label="Rounds to simulate"
+          label="Rounds"
           value={rounds}
           options={[200, 500, 1000].map((v) => ({ value: v, label: `${formatInt(v)} rounds` }))}
           onChange={setRounds}
         />
         <button type="button" className="btn btn--ghost" onClick={() => setSeed((s) => s + 13)}>
-          Deal new balances
+          New balances
         </button>
         <Status running={running} error={error} />
       </Card>
@@ -616,22 +541,10 @@ function WhoPays() {
         ) : (
           <>
             <div className="reading">
-              <h3>What this shows</h3>
               <p>
-                The {result.top} biggest holders started with <b>{pct(result.topSupplyShareStart)}</b> of the supply and paid{' '}
-                <b>{pct(myopic.topBurnShare)}</b> of everything burned. A collapse would take the most from a whale, so the
-                falling cost becomes worth paying for them first, and they end up doing it. After {formatInt(result.rounds)}{' '}
-                rounds their share is {pct(myopic.topSupplyShareEnd)}.
+                The {result.top} biggest holders held <b>{pct(result.topSupplyShareStart)}</b> of the supply and paid{' '}
+                <b>{pct(myopic.topBurnShare)}</b> of everything burned.
               </p>
-              {coldMyopic && coldAware && (
-                <p>
-                  Starting cold, with nobody It: holders who only weigh the cut saved {pct(coldMyopic.savedShare)} of rounds
-                  {coldMyopic.firstSavedRound === null ? ', because nothing is charged until someone goes first' : ''}.
-                  Holders who also value being It saved {pct(coldAware.savedShare)}
-                  {coldAware.firstSavedRound !== null ? `, starting in round ${coldAware.firstSavedRound}` : ''}. The throne
-                  is what gets the game going.
-                </p>
-              )}
             </div>
 
             <Card labelId="wp-bars" title={`The ${result.top} biggest holders`} aside={<span className="card__note">{strategyName(myopic.strategy)}</span>}>
@@ -705,13 +618,6 @@ function WhoPays() {
                   </tbody>
                 </table>
               </div>
-              <p className="field__help" style={{ marginTop: 'var(--space-2)' }}>
-                {same
-                  ? 'Once the game is armed, both kinds behave the same in this run: someone always finds the cost worth paying before the deadline. '
-                  : ''}
-                Inequality is the Gini coefficient of balances: 0 is perfectly equal, 1 is one holder with everything. Supply
-                at the start: {tokens(result.supplyStart)} NOTIT across {result.holders} holders.
-              </p>
             </Card>
           </>
         )}
@@ -745,16 +651,15 @@ function Mixed() {
 
   const riders = result?.groups.find((g) => g.strategy === 'freeRider') ?? null;
   const winner = result ? [...result.groups].sort((a, b) => b.shareEnd - a.shareEnd)[0] ?? null : null;
-  const doers = result ? [...result.groups].sort((a, b) => b.saves - a.saves)[0] ?? null : null;
 
   return (
     <div className="lab__grid">
-      <Card labelId="mx-controls" title="Mix the crowd" className="controls">
+      <Card labelId="mx-controls" title="Mix" className="controls">
         <Slider id="mx-alt" label="Altruists" value={altruists} display={`${altruists}`} min={0} max={20} onChange={setAltruists} help="Step up in 30% of rounds, at any price." />
         <Slider id="mx-snp" label="Snipers" value={snipers} display={`${snipers}`} min={0} max={20} onChange={setSnipers} help="Always try in the final block." />
         <Slider
           id="mx-miss"
-          label="Sniper tries that land late"
+          label="Snipers landing late"
           value={missPct}
           display={`${missPct}%`}
           min={0}
@@ -765,54 +670,42 @@ function Mixed() {
         <Slider id="mx-free" label="Free riders" value={freeRiders} display={`${freeRiders}`} min={0} max={100} step={2} onChange={setFreeRiders} help="Never pay." />
         <Select<number>
           id="mx-rounds"
-          label="Rounds to simulate"
+          label="Rounds"
           value={rounds}
           options={[500, 1000, 2000].map((v) => ({ value: v, label: `${formatInt(v)} rounds` }))}
           onChange={setRounds}
         />
         <button type="button" className="btn btn--ghost" onClick={() => setSeed((s) => s + 31)}>
-          Shuffle the dice
+          Reshuffle
         </button>
-        <Status running={running} error={total === 0 ? 'add at least one holder' : error} />
+        <Status running={running} error={total === 0 ? 'no holders' : error} />
       </Card>
 
       <div className="lab__results" style={{ opacity: running && result ? 0.6 : 1 }}>
         {total === 0 ? (
-          <p className="empty">Add at least one holder to run the simulation.</p>
+          <p className="empty">Add at least one holder.</p>
         ) : !result ? (
           <p className="empty">Simulating…</p>
         ) : (
           <>
             <div className="reading">
-              <h3>What this shows</h3>
               {riders && riders.count > 0 ? (
                 <p>
-                  The free riders never paid, and it cost them: their share of all tokens went from{' '}
-                  <b>{pct(riders.shareStart)}</b> to <b>{pct(riders.shareEnd)}</b>. Every unsaved round took{' '}
-                  {formatPpm(FAST.cutPpm)} from each of them and handed it to whoever was It.
+                  Free riders never paid, and their share of all tokens went from <b>{pct(riders.shareStart)}</b> to{' '}
+                  <b>{pct(riders.shareEnd)}</b>.
                 </p>
-              ) : (
-                <p>With no free riders, the cut only moves tokens between the people who do the work.</p>
-              )}
-              {doers && winner && result.saved > 0 ? (
+              ) : winner ? (
                 <p>
-                  {groupName(doers.strategy)} made {formatInt(doers.saves)} of {formatInt(result.saved)} saves
-                  {doers.strategy === winner.strategy
-                    ? ` and ended with ${pct(winner.shareEnd)} of everything`
-                    : `, and ${groupName(winner.strategy).toLowerCase()} ended with ${pct(winner.shareEnd)} of everything`}
-                  . Nobody saved {pct(result.failureRate)} of rounds. Sitting still is not neutral here: the idle pay the
-                  ones who act.
+                  {groupName(winner.strategy)} ended with <b>{pct(winner.shareEnd)}</b> of all tokens.
                 </p>
-              ) : (
-                <p>Nobody ever volunteered, so nobody became It and nothing was ever charged. The game never started.</p>
-              )}
+              ) : null}
             </div>
 
             <ul className="figures">
-              <Figure label="Rounds nobody saved" value={pct(result.failureRate)} note={`${formatInt(result.collapsed)} paid It, ${formatInt(result.dormant)} dormant`} />
-              <Figure label="Longest streak of saves" value={formatInt(result.longestStreak)} note="rounds in a row" />
-              <Figure label="Burned by volunteers" value={tokens(result.totalBurned)} note={`supply ${tokens(result.supplyStart)} → ${tokens(result.supplyEnd)}`} />
-              <Figure label="Moved to It" value={tokens(result.totalPaid)} note="taken from everyone else" />
+              <Figure label="Nobody saved" value={pct(result.failureRate)} />
+              <Figure label="Longest streak" value={formatInt(result.longestStreak)} />
+              <Figure label="Burned" value={tokens(result.totalBurned)} />
+              <Figure label="Moved to It" value={tokens(result.totalPaid)} />
             </ul>
 
             <Card
@@ -853,7 +746,7 @@ function Mixed() {
               </div>
             </Card>
 
-            <Card labelId="mx-table" title="The numbers" aside={<span className="card__note">{formatInt(result.rounds)} rounds, {result.holders} holders</span>}>
+            <Card labelId="mx-table" title="The numbers" >
               <div className="tablewrap">
                 <table className="table">
                   <thead>
@@ -927,10 +820,6 @@ export function Lab() {
         <h1 className="page__title">
           Does anyone <span className="pitch__hl">actually do it?</span>
         </h1>
-        <p className="page__lead">
-          Three experiments on the same rules engine the game uses, run in your browser. Move a control and the crowd
-          plays again.
-        </p>
       </header>
 
       <div className="subtabs" role="tablist" aria-label="Experiments" onKeyDown={onKey}>

@@ -35,14 +35,11 @@ function DemoBar({ demo, game, onRestart }: { demo: DemoControls; game: Game; on
   };
   return (
     <div className="demobar">
-      <p className="demobar__text">
-        <span className="chip chip--accent">Demo mode</span>
-        <span>A simulated crowd on a fast clock, all in your browser. No wallet, no network.</span>
-      </p>
+      <p className="demobar__text">Demo: simulated crowd</p>
       <div className="demobar__controls">
         <div className="seg" role="group" aria-label="How long a round takes">
           <span className="seg__label" aria-hidden="true">
-            A round takes
+            Round
           </span>
           {ROUND_SPEEDS.map((s) => (
             <button key={s} type="button" className="seg__opt" aria-pressed={seconds === s} onClick={() => pick(s)}>
@@ -64,7 +61,6 @@ function Skeleton() {
       <div className="slab slab--loading">
         <p className="slab__ticker">
           <span className="slab__stamp">Loading</span>
-          <span>Setting up the round…</span>
         </p>
         <div className="slab__body">
           <div className="slab__clock">
@@ -95,7 +91,7 @@ export function Play({ game, mode, demo, chain, onRestartDemo, onUseDemo, onShow
         <div className="play">
           <div className="notice" role="alert">
             <h2>Could not reach NEAR testnet</h2>
-            <p>The network did not answer ({game.error}). The demo runs the same rules in your browser, with no network.</p>
+            <p>{game.error}</p>
             <div className="notice__actions">
               <button type="button" className="btn" onClick={() => void game.refresh()}>
                 Try again
@@ -124,12 +120,12 @@ export function Play({ game, mode, demo, chain, onRestartDemo, onUseDemo, onShow
 
       {game.error && (
         <p className="notice notice--inline" role="status">
-          Having trouble reaching the network. Showing the last known state.
+          Network trouble. Showing the last known state.
         </p>
       )}
 
       <div className="play__grid">
-        <HeroSlab game={game} snap={snap} mode={mode} chain={chain} flash={flash} heads={heads} />
+        <HeroSlab game={game} snap={snap} chain={chain} flash={flash} heads={heads} />
         <div className="play__side">
           <Throne snap={snap} flash={flash} />
           <You snap={snap} flash={flash} mode={mode} />
@@ -143,19 +139,12 @@ export function Play({ game, mode, demo, chain, onRestartDemo, onUseDemo, onShow
       <RoundStrip snap={snap} />
 
       <div className="play__two">
-        <HeroWall snap={snap} crowd={crowd} />
+        <HeroWall snap={snap} />
         <RoundLog snap={snap} />
       </div>
 
-      {crowd && <Crowd crowd={crowd} totalSupply={snap.state.totalSupply} />}
+      {crowd && <Crowd crowd={crowd} />}
 
-      <p className="play__more">
-        New here?{' '}
-        <button type="button" className="linkbtn" onClick={onShowRules}>
-          Read the five rules
-        </button>
-        . It takes a minute.
-      </p>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { Mode } from '../Header';
 import type { GameSnapshot, RoundClose } from '../../hooks/useGame';
 import { itCollects } from '../../lib/cost';
-import { formatCompact, formatInt, formatPpm, formatShare, formatTimeLeft, formatToken } from '../../lib/format';
+import { formatCompact, formatInt, formatShare, formatTimeLeft, formatToken, shortAccount } from '../../lib/format';
 import { Amount, Card, Who, cls } from '../ui';
 
 function amount(v: bigint): string {
@@ -23,63 +23,53 @@ export function Throne({ snap, flash }: { snap: GameSnapshot; flash: RoundClose 
   const { state: s, config, accountId: me, itAccount } = snap;
   const max = config.maxCollapseRun;
   const run = Math.min(s.collapseRun, max);
-  const cutPct = formatPpm(config.cutPpm);
   const since = s.it ? becameItIn(snap, s.it) : null;
   const gain = s.it && itAccount ? itCollects(s.totalSupply, itAccount.balance, config.cutPpm) : 0n;
   const paidNow = flash?.kind === 'collapsed';
 
-  let note: ReactNode;
-  if (!s.it) note = 'The first person to volunteer becomes It. Until then nothing is charged.';
-  else if (s.saved)
-    note = `Safe this round. ${s.it === me ? 'You collect' : 'Collects'} ${cutPct} of every other balance if the next round ends unsaved.`;
-  else if (run >= max) note = `The game is asleep: ${max} rounds were charged in a row, so nothing more is charged until someone volunteers.`;
-  else
-    note = (
-      <>
-        If this round ends unsaved: {s.it === me ? 'you collect' : 'collects'} about <b>{amount(gain)} NOTIT</b>, {cutPct} of
-        everyone else.
-      </>
-    );
+  // What It stands to collect is only a live question while the round is open and charged.
+  const atStake = s.it !== null && !s.saved && s.armed;
 
   return (
     <Card
       labelId="throne-title"
       className={cls('throne', paidNow && 'throne--paid', s.it !== null && s.it === me && 'throne--me')}
-      title="Who is It"
+      title={<span className="sr-only">Who is It</span>}
       aside={<span className="throne__badge">It</span>}
     >
       {s.it ? (
         <>
-          <p className="throne__who">
-            <Who id={s.it} me={me} />
-            <span className="throne__verb">{s.it === me ? ' are It' : ' is It'}</span>
+          <p className={cls('throne__who', s.it !== me && shortAccount(s.it).length > 13 && 'throne__who--long')}>
+            <Who id={s.it} me={me} />{' '}
+            <span className="throne__verb">{s.it === me ? 'are It' : 'is It'}</span>
           </p>
-          <p className="throne__since">
-            {since !== null ? `The last one who did it, in round ${formatInt(since)}.` : 'The last one who did it.'}
-          </p>
+          {since !== null && <p className="throne__since">since round {formatInt(since)}</p>}
           <dl className="kv">
             <div>
-              <dt>Collected so far</dt>
+              <dt>Collected</dt>
               <dd>
-                <Amount key={s.it} value={itAccount?.collected ?? 0n} /> <small>NOTIT</small>
+                <Amount key={s.it} value={itAccount?.collected ?? 0n} />
               </dd>
             </div>
             <div>
-              <dt>Burned to get here</dt>
-              <dd>
-                {amount(itAccount?.burned ?? 0n)} <small>NOTIT</small>
-              </dd>
+              <dt>Burned</dt>
+              <dd>{amount(itAccount?.burned ?? 0n)}</dd>
             </div>
+            {atStake && (
+              <div>
+                <dt>If nobody does</dt>
+                <dd>+{amount(gain)}</dd>
+              </div>
+            )}
           </dl>
         </>
       ) : (
         <p className="throne__who throne__who--empty">Nobody is It yet</p>
       )}
-      <p className="throne__note">{note}</p>
       {run > 0 && (
         <div className="run" role="img" aria-label={`Unsaved rounds charged in a row: ${run} of ${max}`}>
           <span className="run__label">
-            Unsaved in a row: charged <b>{run}</b> of {max}
+            Unsaved run <b>{run}</b> of {max}
           </span>
           <span className="run__pips" aria-hidden="true">
             {Array.from({ length: max }, (_, i) => (
@@ -94,11 +84,10 @@ export function Throne({ snap, flash }: { snap: GameSnapshot; flash: RoundClose 
 
 /** The viewer's own account. */
 export function You({ snap, flash, mode }: { snap: GameSnapshot; flash: RoundClose | null; mode: Mode }) {
-  const { account, accountId, state: s, config } = snap;
+  const { account, accountId, state: s } = snap;
   const balance = account?.balance ?? 0n;
   const delta =
     flash && flash.balanceBefore !== null && flash.balanceAfter !== null ? flash.balanceAfter - flash.balanceBefore : 0n;
-  const net = (account?.collected ?? 0n) - (account?.burned ?? 0n);
   // No row of zeros before there is anything to count.
   const played = !!account && (account.claimed || account.balance > 0n || account.saves > 0);
 
@@ -107,12 +96,10 @@ export function You({ snap, flash, mode }: { snap: GameSnapshot; flash: RoundClo
       labelId="you-title"
       className="you"
       title="You"
-      aside={accountId ? <span className="chip">{mode === 'demo' ? 'demo account' : accountId}</span> : null}
+      aside={accountId && mode !== 'demo' ? <span className="chip">{shortAccount(accountId)}</span> : null}
     >
       {!accountId || !account ? (
-        <p className="you__empty">
-          Not signed in. Watching needs no account. To play, use “Play as guest” or connect a wallet.
-        </p>
+        <p className="you__empty">Not signed in.</p>
       ) : (
         <>
           <p className="you__balance">
@@ -125,13 +112,7 @@ export function You({ snap, flash, mode }: { snap: GameSnapshot; flash: RoundClo
               </span>
             )}
           </p>
-          <p className="you__share">
-            {balance > 0n
-              ? `${formatShare(balance, s.totalSupply)} of the supply${account.isIt ? ' · you are It' : ''}`
-              : account.claimed
-                ? 'Nothing left.'
-                : `Nothing yet. Claim ${formatToken(config.claimAmount)} NOTIT to play.`}
-          </p>
+          {balance > 0n && <p className="you__share">{formatShare(balance, s.totalSupply)} of supply</p>}
           {played && (
             <dl className="kv kv--3">
               <div>
@@ -139,19 +120,14 @@ export function You({ snap, flash, mode }: { snap: GameSnapshot; flash: RoundClo
                 <dd>{formatInt(account.saves)}</dd>
               </div>
               <div>
-                <dt>You burned</dt>
+                <dt>Burned</dt>
                 <dd>{amount(account.burned)}</dd>
               </div>
               <div>
-                <dt>You collected</dt>
+                <dt>Collected</dt>
                 <dd>{amount(account.collected)}</dd>
               </div>
             </dl>
-          )}
-          {(account.saves > 0 || account.collected > 0n) && (
-            <p className="you__net">
-              Volunteering has {net >= 0n ? 'made' : 'cost'} you {amount(net < 0n ? -net : net)} NOTIT so far.
-            </p>
           )}
         </>
       )}
@@ -177,24 +153,10 @@ export function Stats({ snap }: { snap: GameSnapshot }) {
   return (
     <section aria-label="Game statistics">
       <ul className="stats">
-        <Stat
-          label="Survival streak"
-          value={formatInt(st.currentStreak)}
-          unit={st.currentStreak === 1 ? 'round' : 'rounds'}
-          note={`Longest: ${formatInt(st.longestStreak)}`}
-        />
-        <Stat
-          label="Closest call"
-          value={st.closestCallMs === null ? '—' : formatTimeLeft(st.closestCallMs)}
-          note="least time left at a save"
-        />
-        <Stat label="Burned by volunteers" value={formatCompact(st.totalBurned)} unit="NOTIT" note={`${formatInt(st.roundsSaved)} saves`} />
-        <Stat
-          label="Paid to It"
-          value={formatCompact(st.totalPaid)}
-          unit="NOTIT"
-          note={`${formatInt(st.roundsCollapsed)} unsaved rounds charged`}
-        />
+        <Stat label="Streak" value={formatInt(st.currentStreak)} note={`longest ${formatInt(st.longestStreak)}`} />
+        <Stat label="Closest call" value={st.closestCallMs === null ? '—' : formatTimeLeft(st.closestCallMs)} />
+        <Stat label="Burned" value={formatCompact(st.totalBurned)} note={`${formatInt(st.roundsSaved)} saves`} />
+        <Stat label="Paid to It" value={formatCompact(st.totalPaid)} note={`${formatInt(st.roundsCollapsed)} unsaved`} />
       </ul>
     </section>
   );

@@ -1,8 +1,14 @@
 # Not It ($NOTIT)
 
+[![CI](https://github.com/arshiaxbt/notit/actions/workflows/ci.yml/badge.svg)](https://github.com/arshiaxbt/notit/actions/workflows/ci.yml)
+
 A memecoin whose only mechanic is a volunteer's dilemma with real stakes, on NEAR.
 
 **Somebody has to do it. If nobody does, everybody pays the last person who did.**
+
+[![The live round on NEAR testnet: countdown, falling cost, who is It](docs/media/play-testnet.png)](https://arshiaxbt.github.io/notit/)
+
+A 70-second recording of one real session on testnet (claim, volunteer, a round nobody saves): [docs/media/demo.mp4](docs/media/demo.mp4).
 
 | | |
 |---|---|
@@ -162,6 +168,8 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 | `docs/SPEC.md` | The specification both implementations were written from |
 | `docs/MECHANISM.md` | Incentives, equilibrium analysis, parameters, limits |
 | `scripts/` | `deploy.sh`, `lock.sh` |
+| `docs/media/` | Demo video and screenshots |
+| `contract/deployed/` | The WebAssembly that is on chain |
 
 ## How correctness is checked
 

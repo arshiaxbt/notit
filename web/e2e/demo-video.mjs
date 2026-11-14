@@ -6,7 +6,7 @@
  *           testnet account, and drives one real sequence:
  *             watch -> claim 1,000 NOTIT -> next round: "I'll do it" (you are It)
  *             -> the round after: nobody volunteers, everyone pays It
- *             -> hero wall and round history (or the lock, if the contract is locked)
+ *             -> the lock line and rule five if the contract is locked (hero wall and history if not)
  *             -> Lab: crowd-size slider -> end card.
  *           Captions, the "×16" marker and the end card are elements injected into
  *           the page, so they are crisp and in the app's own type. Every number on
@@ -45,6 +45,8 @@
  *   OUT_DIR            demo.mp4, poster and screenshots   (default docs/media)
  *   BOTS_STOP/START    shell commands to pause/resume bots (optional)
  *   REHEARSAL=1        do not wait for a bot to save the opening round, and skip the claim if already made
+ *   FORCE_LOCK_BEAT=1  with REHEARSAL: film the lock beat's scrolling on a contract that is not locked
+ *   SITE               address shown on the end card       (default arshiaxbt.github.io/notit)
  *   PLAYWRIGHT_MODULE, FFMPEG, FFPROBE                    (defaults: "playwright", "ffmpeg", "ffprobe")
  */
 import { execFileSync, execSync } from 'node:child_process';
@@ -60,6 +62,10 @@ const OUT_DIR = resolve(process.env.OUT_DIR ?? join(here, '../../docs/media'));
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 const FFPROBE = process.env.FFPROBE ?? 'ffprobe';
 const REHEARSAL = process.env.REHEARSAL === '1';
+/** Shown on the end card. */
+const SITE = process.env.SITE ?? 'arshiaxbt.github.io/notit';
+/** Rehearse the lock beat's scrolling on a contract that is not locked (never for a real take). */
+const FORCE_LOCK_BEAT = REHEARSAL && process.env.FORCE_LOCK_BEAT === '1';
 const W = 1280;
 const H = 720;
 const FPS = 30;
@@ -76,7 +82,7 @@ const now = () => Date.now() / 1000;
 /* ------------------------------------------------------------------ record */
 
 /** Runs in the page: caption bar, fast-forward marker and end card, in the app's own style. */
-export function installOverlay({ zoom, speed }) {
+export function installOverlay({ zoom, speed, url = '' }) {
   document.body.style.zoom = String(zoom);
   const style = document.createElement('style');
   style.textContent = `
@@ -99,6 +105,8 @@ export function installOverlay({ zoom, speed }) {
     .vid-end__name { font-weight: 800; font-size: 46px; letter-spacing: -0.02em; }
     .vid-end__name b { color: #ffd60a; }
     .vid-end__by { font-weight: 700; font-size: 34px; }
+    .vid-end__url { font-weight: 800; font-size: 34px; color: #ffd60a; }
+    .vid-end__url:empty { display: none; }
     .vid-end__small { margin-top: 6px; padding: 6px 18px; border: 2.5px solid #fff4d6; border-radius: 999px; font-weight: 700; font-size: 22px;
       letter-spacing: .09em; text-transform: uppercase; }
   `;
@@ -117,6 +125,7 @@ export function installOverlay({ zoom, speed }) {
     <div class="vid-end__logo"><span>Not</span><span class="vid-end__it">it!</span></div>
     <div class="vid-end__name">Not It <b>($NOTIT)</b></div>
     <div class="vid-end__by">built at NEAR HACKATHON</div>
+    <div class="vid-end__url">${url}</div>
     <div class="vid-end__small">testnet · test tokens · no value</div>`;
   window.__vid = {
     caption(html) {
@@ -218,14 +227,35 @@ async function record() {
   let counter = 0;
   const writes = [];
   const cdp = await context.newCDPSession(page);
-  cdp.on('Page.screencastFrame', (f) => {
-    cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
-    const ts = f.metadata.timestamp ?? now();
-    if (paused || ts - lastKept < minGap) return;
+  const keep = (data, ts) => {
     lastKept = ts;
     const file = `f${String(++counter).padStart(6, '0')}.jpg`;
     frames.push({ file, ts });
-    writes.push(writeFile(join(WORK_DIR, 'frames', file), Buffer.from(f.data, 'base64')));
+    writes.push(writeFile(join(WORK_DIR, 'frames', file), Buffer.from(data, 'base64')));
+  };
+  // Chrome only sends a frame when the picture changes. A frame that arrives too soon
+  // after the last kept one is held back, and kept after all if nothing newer follows:
+  // otherwise the last frame of a scroll or a fade could be lost and a stale one shown.
+  let held = null;
+  let heldTimer = null;
+  cdp.on('Page.screencastFrame', (f) => {
+    cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
+    const ts = f.metadata.timestamp ?? now();
+    clearTimeout(heldTimer);
+    if (paused || minGap === Infinity) {
+      held = null;
+      return;
+    }
+    if (ts - lastKept < minGap) {
+      held = { data: f.data, ts };
+      heldTimer = setTimeout(() => {
+        if (held && !paused && minGap !== Infinity) keep(held.data, held.ts);
+        held = null;
+      }, Math.min(400, Math.max(40, minGap * 1000)));
+      return;
+    }
+    held = null;
+    keep(f.data, ts);
   });
   /** Starts a segment of the cut. speed 0 = leave out, 1 = real time, FAST = fast-forward. */
   const segment = (name, speed, extra = {}) => {
@@ -273,7 +303,7 @@ async function record() {
     await page.waitForSelector('.acct__id', { timeout: 45_000 });
     await page.waitForFunction(() => !/Checking/.test(document.querySelector('.lock')?.textContent ?? ''), null, { timeout: 30_000 });
     await page.evaluate(() => document.fonts.ready);
-    await page.evaluate(installOverlay, { zoom: ZOOM, speed: FAST });
+    await page.evaluate(installOverlay, { zoom: ZOOM, speed: FAST, url: SITE });
     facts.contract = await text('.chainbar code');
     facts.locked = (await page.locator('.lock--locked').count()) > 0;
     log(`signed in as ${await text('.acct__id')} on ${facts.contract}; locked: ${facts.locked}`);
@@ -389,7 +419,7 @@ async function record() {
     collapse.catch(() => {});
     // Run the clock out, then give the chain a moment; a longer wait is fast-forwarded.
     while ((await secondsLeft()) > 0 && (await round()) === r2) await sleep(150);
-    await settle('beat4', collapse, 3500);
+    await settle('beat4', collapse);
     event('collapse seen', { round: r2, ticker: await text('.slab__ticker') });
     await caption('Nobody stepped up. <b>Everyone paid 15% to It.</b>');
     await sleep(1300);
@@ -412,15 +442,15 @@ async function record() {
 
     // ---- beat 5: the lock if there is one, otherwise the record of every round ----
     segment('beat5', 1);
-    if (facts.locked) {
-      await scrollTo('.chainbar', 110, true);
-      await caption('No admin. <b>The contract account has no access keys.</b>');
-      await sleep(4200);
+    if (facts.locked || FORCE_LOCK_BEAT) {
+      // The lock line on the Play page, then rule five on the Rules page.
+      await caption('No admin. <b>The contract account has no access keys</b>, so nobody can change the rules — including its author.');
+      await scrollTo('.chainbar', 150, true);
+      await sleep(4800);
       await page.getByRole('tab', { name: 'Rules' }).click();
-      await sleep(600);
-      await scrollTo('.rules', 12, true);
-      await sleep(4600);
-      await page.getByRole('tab', { name: 'Play' }).click();
+      await page.waitForSelector('.rules');
+      await scrollTo('.rule:nth-child(5)', 250);
+      await sleep(4800);
     } else {
       await caption('Every round is on chain: <b>who did it, what they burned, what they collected.</b>');
       await scrollTo('.stats', 14, true);
@@ -466,6 +496,8 @@ async function record() {
         problems.push(`COULD NOT RESTART THE BOTS: ${e.message}`);
       }
     }
+    clearTimeout(heldTimer);
+    if (held && minGap !== Infinity) keep(held.data, held.ts);
     await cdp.send('Page.stopScreencast').catch(() => {});
     await Promise.all(writes);
     const last = segments[segments.length - 1];
@@ -493,7 +525,8 @@ function probeDuration(file) {
 
 async function build() {
   const timeline = JSON.parse(await readFile(join(WORK_DIR, 'timeline.json'), 'utf8'));
-  const { frames, segments } = timeline;
+  const { segments } = timeline;
+  const frames = [...timeline.frames].sort((a, b) => a.ts - b.ts);
   await mkdir(OUT_DIR, { recursive: true });
   const parts = join(WORK_DIR, 'parts');
   await rm(parts, { recursive: true, force: true });
@@ -504,6 +537,12 @@ async function build() {
   for (const [i, seg] of segments.entries()) {
     if (seg.speed === 0) continue;
     const own = frames.filter((f) => f.ts >= seg.start && f.ts < seg.end);
+    // If the picture did not change right at the start of the segment, the frame showing
+    // then is the last one before it (only if recent: nothing is kept during left-out waits).
+    const before = frames.filter((f) => f.ts < seg.start).pop();
+    if (before && seg.start - before.ts < 1 && (own.length === 0 || own[0].ts - seg.start > 0.05)) {
+      own.unshift({ file: before.file, ts: seg.start });
+    }
     if (own.length < 2) {
       console.log(`segment ${seg.name}: only ${own.length} frames, skipped`);
       continue;

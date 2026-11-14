@@ -107,14 +107,20 @@ export function App() {
         </div>
         <div role="tabpanel" id="panel-rules" aria-labelledby="tab-rules" hidden={tab !== 'rules'}>
           {tab === 'rules' && (
-            <Rules config={game.snapshot?.config ?? null} mode={mode} lock={chain?.state.lock ?? null} onPlay={() => selectTab('play')} />
+            <Rules config={game.snapshot?.config ?? null} mode={mode} lock={chain?.state.lock ?? null} />
           )}
         </div>
       </main>
       <footer className="foot">
         <p>
-          <strong>Not It</strong> is a hackathon experiment on NEAR testnet. Test tokens only. They have no value and
-          nothing here is financial advice.
+          Made by{' '}
+          <a href="https://x.com/0xarshia" target="_blank" rel="noopener noreferrer">
+            0xarshia
+          </a>{' '}
+          ·{' '}
+          <a href="https://github.com/arshiaxbt/notit" target="_blank" rel="noopener noreferrer">
+            Code
+          </a>
         </p>
       </footer>
     </div>

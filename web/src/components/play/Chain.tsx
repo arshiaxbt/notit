@@ -15,99 +15,81 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
-/** Which contract this is, whether its rules are locked, and who you are playing as. */
+function roundLength(note: string | undefined): string {
+  return note ?? '';
+}
+
+/** One line: the contract, whether it is locked, the round length, and the deployment switch. */
 export function ChainBar({ chain }: { chain: ChainUi }) {
   const { session, state } = chain;
   const { config } = session;
   const { deployment, lock, account } = state;
+  const contractUrl = accountUrl(config, deployment.id);
 
-  let lockText: React.ReactNode;
-  if (lock.status === 'locked') {
-    lockText = (
-      <>
-        <b>Locked:</b> this contract account has no access keys, so nobody can change it.
-      </>
-    );
-  } else if (lock.status === 'open') {
-    lockText = (
-      <>
-        <b>Not locked yet:</b> this contract account still has {lock.keys} access {lock.keys === 1 ? 'key' : 'keys'}, so
-        whoever holds {lock.keys === 1 ? 'it' : 'them'} could still change the contract.
-      </>
-    );
-  } else if (lock.status === 'error') {
-    lockText = 'Could not check whether the rules are locked.';
-  } else {
-    lockText = 'Checking whether the rules are locked…';
-  }
+  let lockText: string;
+  if (lock.status === 'locked') lockText = 'Locked: no access keys';
+  else if (lock.status === 'open') lockText = `Not locked: ${lock.keys} access ${lock.keys === 1 ? 'key' : 'keys'}`;
+  else if (lock.status === 'error') lockText = 'Lock not checked';
+  else lockText = 'Checking lock…';
 
   return (
     <div className="chainbar">
       <p className="chainbar__row">
-        <span className="chip chip--accent">Testnet</span>
-        <span>
-          Live on NEAR {config.network}. Contract{' '}
-          <ExternalLink href={accountUrl(config, deployment.id)}>
-            <code>{deployment.id}</code>
-          </ExternalLink>
-          {deployment.note ? ` · ${deployment.note}` : ''}
+        <ExternalLink href={contractUrl}>
+          <code>{deployment.id}</code>
+        </ExternalLink>
+        <span className={cls('lock', `lock--${lock.status}`)} role="status">
+          <span className="lock__icon" aria-hidden="true">
+            {lock.status === 'locked' ? (
+              <svg viewBox="0 0 24 24" width="16" height="16">
+                <rect x="4" y="10" width="16" height="11" rx="2.5" fill="currentColor" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" strokeWidth="2.6" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="16" height="16">
+                <rect x="4" y="10" width="16" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2.4" />
+                <path d="M8 10V7a4 4 0 0 1 7.5-2" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+              </svg>
+            )}
+          </span>
+          {lock.status === 'locked' || lock.status === 'open' ? <ExternalLink href={contractUrl}>{lockText}</ExternalLink> : lockText}
         </span>
-        {config.contracts.length > 1 && (
+        {config.contracts.length > 1 ? (
           <label className="chainbar__pick">
             <span className="sr-only">Deployment</span>
             <select value={deployment.id} onChange={(e) => session.selectContract(e.target.value)}>
               {config.contracts.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.label}
-                  {c.note ? ` · ${c.note}` : ''}
+                  {c.note ?? c.label}
                 </option>
               ))}
             </select>
           </label>
+        ) : (
+          <span>{roundLength(deployment.note)}</span>
         )}
-      </p>
-      <p className={cls('chainbar__row', 'lock', `lock--${lock.status}`)} role="status">
-        <span className="lock__icon" aria-hidden="true">
-          {lock.status === 'locked' ? (
-            <svg viewBox="0 0 24 24" width="16" height="16">
-              <rect x="4" y="10" width="16" height="11" rx="2.5" fill="currentColor" />
-              <path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" strokeWidth="2.6" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="16" height="16">
-              <rect x="4" y="10" width="16" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2.4" />
-              <path d="M8 10V7a4 4 0 0 1 7.5-2" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-            </svg>
-          )}
-        </span>
-        <span>{lockText}</span>
-      </p>
-      {account?.kind === 'guest' && (
-        <p className="chainbar__row chainbar__guest">
-          <span>
-            You are playing as <b>{shortAccount(account.id)}</b>, a throwaway testnet account. Its key lives only in
-            this browser.
-          </span>
+        {account?.kind === 'guest' && (
           <button
             type="button"
-            className="linkbtn"
+            className="linkbtn chainbar__forget"
+            title="Delete this guest account's key from this browser"
             onClick={() => {
               if (window.confirm('Forget this guest account? Its key exists only in this browser, so it cannot be recovered.')) {
                 session.forgetGuest();
               }
             }}
           >
-            Forget this guest account
+            Forget guest
           </button>
-        </p>
-      )}
+        )}
+      </p>
     </div>
   );
 }
 
 const STEPS: Array<{ id: GuestStep; label: (claim: string) => string }> = [
-  { id: 'account', label: () => 'Create a throwaway testnet account' },
-  { id: 'confirm', label: () => 'Wait for the network to see it' },
+  { id: 'account', label: () => 'Create account' },
+  { id: 'confirm', label: () => 'Wait for the network' },
   { id: 'claim', label: (claim) => `Claim ${claim} NOTIT` },
 ];
 
@@ -135,9 +117,7 @@ export function GuestStart({ chain, claimAmount }: { chain: ChainUi; claimAmount
       <button type="button" className="cta" disabled={running || restoring} onClick={() => void session.playAsGuest()}>
         <span className="cta__label">{label}</span>
         {!running && !restoring && (
-          <span className="cta__sub">
-            {stored && !failed ? shortAccount(stored) : `one click: a testnet account and ${claim} NOTIT`}
-          </span>
+          <span className="cta__sub">{stored && !failed ? shortAccount(stored) : `testnet account + ${claim} NOTIT`}</span>
         )}
       </button>
 
@@ -162,7 +142,6 @@ export function GuestStart({ chain, claimAmount }: { chain: ChainUi; claimAmount
         </ol>
       )}
       <div role="status" aria-live="polite">
-        {running && <p className="cta__hint">This takes about ten seconds. The testnet faucet is doing the work.</p>}
         {failed && guest.error && <p className="cta__hint cta__hint--warn">{guest.error}</p>}
       </div>
 
@@ -176,10 +155,7 @@ export function GuestStart({ chain, claimAmount }: { chain: ChainUi; claimAmount
               {wallet.error}
             </p>
           )}
-          <p className="cta__hint">
-            A guest is a throwaway testnet account made for you. Its key is kept in this browser only. Watching needs no
-            account at all.
-          </p>
+          <p className="cta__hint">Throwaway testnet account. Key stays in this browser.</p>
         </>
       )}
     </div>
@@ -190,7 +166,7 @@ export function GuestStart({ chain, claimAmount }: { chain: ChainUi; claimAmount
 export function TxLink({ chain, hash, label }: { chain: ChainUi; hash: string; label: string }) {
   return (
     <p className="cta__hint txlink">
-      {label} <ExternalLink href={txUrl(chain.session.config, hash)}>View transaction</ExternalLink>
+      {label} · <ExternalLink href={txUrl(chain.session.config, hash)}>transaction</ExternalLink>
     </p>
   );
 }

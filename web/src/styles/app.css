@@ -1174,16 +1174,18 @@
 .throne__note b {
   color: var(--ink);
 }
+/* Paid: an accent ring closes in on the dark panel. (The ring only gets thinner;
+   no colour is blended, so there is no muddy in-between tint.) */
 .throne--paid {
   animation: paid 1.1s ease-out;
 }
 @keyframes paid {
   0% {
-    background: var(--accent);
+    box-shadow: 0 0 0 9px var(--accent);
     transform: scale(1.02);
   }
   100% {
-    background: var(--surface);
+    box-shadow: 0 0 0 0 var(--accent);
     transform: scale(1);
   }
 }
@@ -1620,7 +1622,11 @@
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.03em;
-  text-wrap: balance;
+}
+/* The highlighted phrase moves to its own line as a whole; it only breaks inside
+   itself when the screen is narrower than the phrase. */
+.page__title .pitch__hl {
+  display: inline-block;
 }
 .page__lead {
   font-size: 1.08rem;
@@ -2381,9 +2387,31 @@
 .throne .card__title {
   color: var(--accent);
 }
+/* "<name> is It" on one line when it fits; a long name is set a size smaller so it
+   still does. If even that is too wide, the name takes line one and "is It" line
+   two, both at the same size, and the name is cut with an ellipsis, never the panel. */
 .throne__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.28em;
   font-size: clamp(1.4rem, 5.2vw, 1.7rem);
   color: var(--accent);
+}
+.throne__who--long {
+  font-size: 1.22rem;
+}
+.throne__who .who {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.throne__who .who--me {
+  flex: none;
+}
+.throne__verb {
+  white-space: nowrap;
 }
 .throne__verb {
   color: var(--ink);
@@ -2437,4 +2465,105 @@
 }
 .rules {
   gap: var(--space-2);
+}
+
+/* ---- fewer words: what is left is a label and a number ---- */
+.foot a {
+  color: var(--ink);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+.demobar__text {
+  font-weight: 700;
+  color: var(--ink);
+}
+.chainbar__row {
+  gap: 6px var(--space-4);
+}
+.lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.chainbar__forget {
+  margin-left: auto;
+  font-size: 0.9rem;
+}
+.throne .card__head {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+.throne__badge {
+  margin-top: -4px;
+}
+.throne__since {
+  margin: 0 0 var(--space-3);
+}
+.throne .kv {
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+}
+.you__share {
+  margin-bottom: 0;
+}
+.you .kv {
+  margin-top: var(--space-3);
+}
+.strip__caption {
+  min-height: 1.45em;
+}
+@media (max-width: 520px) {
+  .strip__caption {
+    min-height: 1.45em;
+  }
+}
+.log__item {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.log__round {
+  grid-row: auto;
+}
+.outcomes__list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.outcome__label {
+  font-size: 0.86rem;
+}
+@media (max-width: 520px) {
+  .outcomes__list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+}
+.crowd {
+  padding-bottom: 0;
+}
+.crowd__summary {
+  width: fit-content;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.crowd[open] .crowd__summary {
+  margin-bottom: var(--space-3);
+}
+.rule {
+  align-items: center;
+}
+.rule h3 {
+  font-weight: 700;
+  max-width: 44ch;
+}
+.rules__stakes {
+  max-width: 60ch;
+  padding-top: var(--space-4);
+  border-top: var(--border) solid var(--line);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.reading {
+  font-size: 1.15rem;
 }

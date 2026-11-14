@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Mode } from '../Header';
 import { outcomeOfRound } from '../../hooks/useGame';
 import type { Game, GameSnapshot, RoundClose } from '../../hooks/useGame';
 import { useLive } from '../../hooks/useLive';
 import type { ChainUi } from '../../hooks/useSession';
 import type { Live } from '../../hooks/useLive';
 import { itCollects, maxCostFor, outcomesFor } from '../../lib/cost';
-import { formatCountdown, formatPpm, formatShare, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
+import { formatCountdown, formatPpm, formatToken, shortAccount, spokenCountdown } from '../../lib/format';
 import { Digits, Who, cls } from '../ui';
 import { GuestStart, TxLink } from './Chain';
 
@@ -48,7 +47,6 @@ function Ticker({ snap, flash }: { snap: GameSnapshot; flash: RoundClose | null 
     return (
       <p className="slab__ticker">
         <span className="slab__stamp">New game</span>
-        <span>No rounds have closed yet.</span>
       </p>
     );
   }
@@ -57,20 +55,19 @@ function Ticker({ snap, flash }: { snap: GameSnapshot; flash: RoundClose | null 
   if (last.kind === 'saved') {
     text = (
       <>
-        Round {last.round} was saved by <b>{last.hero ? name(last.hero, me) : 'someone'}</b> with{' '}
-        {formatCountdown(last.msLeft)} left. Nobody paid.
+        #{last.round} <b>{last.hero ? name(last.hero, me) : 'someone'}</b> did it · {formatCountdown(last.msLeft)} left
       </>
     );
     stamp = 'Saved';
   } else if (last.kind === 'collapsed') {
     text = (
       <>
-        Round {last.round}: nobody did it. Everyone paid {cutPct} to <b>{last.it ? name(last.it, me) : 'It'}</b>.
+        #{last.round} nobody · everyone paid <b>{last.it ? name(last.it, me) : 'It'}</b>
       </>
     );
     stamp = `−${cutPct}`;
   } else {
-    text = <>Round {last.round} passed unsaved. Nothing was charged.</>;
+    text = <>#{last.round} nobody</>;
     stamp = 'No charge';
   }
   return (
@@ -150,143 +147,52 @@ interface OutcomeTile {
   key: string;
   tone: 'plain' | 'cut' | 'do' | 'it';
   label: string;
-  value: ReactNode;
-  detail: ReactNode;
+  value: string;
 }
 
+/** What each ending of this round does to one balance: three labels, three numbers. */
 function Outcomes({ snap, live }: { snap: GameSnapshot; live: Live }) {
-  const { state: s, config, account, accountId: me } = snap;
+  const { state: s, config, account } = snap;
   const hasTokens = !!account && account.balance > 0n;
   const balance = hasTokens ? account!.balance : config.claimAmount;
   const isIt = hasTokens && !!account?.isIt;
   const cutPct = formatPpm(config.cutPpm);
   const o = outcomesFor(balance, live.cost, config.cutPpm);
-  const itName = s.it ? name(s.it, me) : null;
-  const heading = hasTokens ? 'What this round does to your balance' : `What this round would do to ${formatToken(balance)} NOTIT`;
+  const heading = hasTokens ? 'Your balance after' : `${formatToken(balance)} NOTIT after`;
+  const spoken = hasTokens ? 'What each ending of this round does to your balance' : `What each ending of this round would do to ${formatToken(balance)} NOTIT`;
+  const youDoIt = o.ifYouDoIt === null ? '—' : amount(o.ifYouDoIt);
 
-  let lead: ReactNode = null;
   const tiles: OutcomeTile[] = [];
-
   if (s.roundSupply === 0n) {
-    lead = <>No tokens were in play when this round opened, so there is nothing to save and nothing to pay.</>;
+    // Nothing to save: no figures.
   } else if (s.saved) {
-    const cutOfOthers = `${cutPct} of every other balance if the next round ends unsaved`;
-    lead =
-      s.hero === me ? (
-        <>
-          <b>This round is safe.</b> Nobody pays. <b>You</b> are It now, and collect {cutOfOthers}.
-        </>
-      ) : (
-        <>
-          <b>This round is safe.</b> Nobody pays. {s.hero ? <b>{name(s.hero, me)}</b> : 'The volunteer'} is It now, and
-          collects {cutOfOthers}.
-        </>
-      );
+    tiles.push({ key: 'saved', tone: 'plain', label: 'Saved · nobody pays', value: amount(o.keep) });
   } else if (!s.armed) {
-    const exhausted = s.it !== null && s.collapseRun >= config.maxCollapseRun;
-    lead = (
-      <>
-        <b>Nothing is charged this round.</b>{' '}
-        {exhausted
-          ? `${config.maxCollapseRun} unsaved rounds in a row have been charged, which is the limit.`
-          : 'Nobody is It yet, so there is nobody to pay.'}{' '}
-        Volunteering still matters: it makes you It and re-arms the game, so the next unsaved round pays you.
-      </>
-    );
-    tiles.push({
-      key: 'none',
-      tone: 'plain',
-      label: 'If nobody does it',
-      value: <>you keep {amount(o.keep)}</>,
-      detail: 'Nothing is charged while the game is not armed.',
-    });
-    tiles.push({
-      key: 'do',
-      tone: 'do',
-      label: 'If you do it now',
-      value: o.ifYouDoIt === null ? <>costs {amount(live.cost)}</> : <>you burn {amount(live.cost)} → {amount(o.ifYouDoIt)}</>,
-      detail: o.ifYouDoIt === null ? 'More than this balance holds. The cost keeps falling.' : 'and become It.',
-    });
+    tiles.push({ key: 'none', tone: 'plain', label: 'Nobody does · no charge', value: amount(o.keep) });
+    tiles.push({ key: 'do', tone: 'do', label: 'You do it', value: youDoIt });
   } else if (isIt) {
     const gain = itCollects(s.totalSupply, balance, config.cutPpm);
-    lead = (
-      <>
-        <b>You are It.</b> If nobody steps up this round, you collect about <b>{amount(gain)} NOTIT</b>.
-      </>
-    );
-    tiles.push({
-      key: 'none',
-      tone: 'it',
-      label: 'If nobody does it',
-      value: <>you collect about {amount(gain)}</>,
-      detail: `${cutPct} of everyone else's balance → ${amount(balance + gain)}`,
-    });
-    tiles.push({
-      key: 'other',
-      tone: 'plain',
-      label: 'If someone else saves it',
-      value: <>you keep {amount(o.keep)}</>,
-      detail: 'and they become It instead of you.',
-    });
-    tiles.push({
-      key: 'do',
-      tone: 'do',
-      label: 'If you do it now',
-      value: o.ifYouDoIt === null ? <>costs {amount(live.cost)}</> : <>you burn {amount(live.cost)} → {amount(o.ifYouDoIt)}</>,
-      detail: 'You are already It, so this only costs you.',
-    });
+    tiles.push({ key: 'none', tone: 'it', label: 'Nobody does · you collect', value: amount(balance + gain) });
+    tiles.push({ key: 'other', tone: 'plain', label: 'Someone else does', value: amount(o.keep) });
+    tiles.push({ key: 'do', tone: 'do', label: 'You do it', value: youDoIt });
   } else {
-    tiles.push({
-      key: 'other',
-      tone: 'plain',
-      label: 'If someone else saves it',
-      value: <>you keep {amount(o.keep)}</>,
-      detail: 'Nothing changes for you.',
-    });
-    tiles.push({
-      key: 'none',
-      tone: 'cut',
-      label: 'If nobody does',
-      value: (
-        <>
-          you pay {cutPct} → {amount(o.ifCollapsed)}
-        </>
-      ),
-      detail: (
-        <>
-          −{amount(o.cutAmount)}, and <b>{itName ?? 'It'}</b> collects.
-        </>
-      ),
-    });
-    tiles.push({
-      key: 'do',
-      tone: 'do',
-      label: 'If you do it now',
-      value: o.ifYouDoIt === null ? <>costs {amount(live.cost)}</> : <>you burn {amount(live.cost)} → {amount(o.ifYouDoIt)}</>,
-      detail:
-        o.ifYouDoIt === null
-          ? 'More than this balance holds. The cost keeps falling.'
-          : live.cost < o.cutAmount
-            ? 'and become It. Cheaper for you than a collapse.'
-            : 'and become It. Dearer than a collapse, for now.',
-    });
+    tiles.push({ key: 'other', tone: 'plain', label: 'Someone else does', value: amount(o.keep) });
+    tiles.push({ key: 'none', tone: 'cut', label: `Nobody does · −${cutPct}`, value: amount(o.ifCollapsed) });
+    tiles.push({ key: 'do', tone: 'do', label: 'You do it', value: youDoIt });
   }
+  if (tiles.length === 0) return null;
 
   return (
-    <div className="outcomes" role="group" aria-label={heading}>
+    <div className="outcomes" role="group" aria-label={spoken}>
       <h3 className="outcomes__title">{heading}</h3>
-      {lead && <p className="outcomes__lead">{lead}</p>}
-      {tiles.length > 0 && (
-        <ul className="outcomes__list">
-          {tiles.map((t) => (
-            <li key={t.key} className={cls('outcome', `outcome--${t.tone}`)}>
-              <span className="outcome__label">{t.label}</span>
-              <span className="outcome__value">{t.value}</span>
-              <span className="outcome__detail">{t.detail}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="outcomes__list">
+        {tiles.map((t) => (
+          <li key={t.key} className={cls('outcome', `outcome--${t.tone}`)}>
+            <span className="outcome__label">{t.label}</span>
+            <span className="outcome__value">{t.value}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -294,77 +200,45 @@ function Outcomes({ snap, live }: { snap: GameSnapshot; live: Live }) {
 interface CtaState {
   label: string;
   sub: string | null;
-  hint: ReactNode;
+  hint: string | null;
   disabled: boolean;
   action: 'claim' | 'volunteer' | null;
 }
 
-function ctaFor(snap: GameSnapshot, live: Live, mode: Mode, pending: Game['pending']): CtaState {
+function ctaFor(snap: GameSnapshot, live: Live, pending: Game['pending']): CtaState {
   const { state: s, config, account, accountId: me } = snap;
-  const claimText = `Claim ${formatToken(config.claimAmount)} NOTIT`;
   const hasTokens = !!account && account.balance > 0n;
-  const leftText = formatCountdown(live.msLeft);
 
-  if (!me || !account) {
-    return {
-      label: 'Sign in to play',
-      sub: null,
-      hint: 'Wallet sign-in is on its way. Demo mode works right now, with no wallet.',
-      disabled: true,
-      action: null,
-    };
-  }
+  if (!me || !account) return { label: 'Sign in to play', sub: null, hint: null, disabled: true, action: null };
   if (!hasTokens) {
     if (!account.claimed && s.claimOpen) {
       return {
-        label: pending === 'claim' ? 'Claiming…' : claimText,
+        label: pending === 'claim' ? 'Claiming…' : `Claim ${formatToken(config.claimAmount)} NOTIT`,
         sub: null,
-        hint:
-          mode === 'demo'
-            ? 'Free demo tokens. Then you can be the one who does it.'
-            : 'Free test tokens from the faucet, one claim per account.',
+        hint: null,
         disabled: pending !== null,
         action: 'claim',
       };
     }
-    return {
-      label: "I'll do it",
-      sub: null,
-      hint:
-        mode === 'demo'
-          ? 'You have no NOTIT left. Restart the demo to claim again.'
-          : 'You have no NOTIT left, and the faucet gives one claim per account.',
-      disabled: true,
-      action: null,
-    };
+    return { label: "I'll do it", sub: null, hint: 'No NOTIT left.', disabled: true, action: null };
   }
-  if (s.saved) {
-    return {
-      label: s.hero === me ? 'You did it' : 'Saved this round',
-      sub: null,
-      hint: `Next round opens in ${leftText}.`,
-      disabled: true,
-      action: null,
-    };
-  }
-  if (s.roundSupply === 0n) {
-    return { label: 'Nothing to save yet', sub: null, hint: 'Your claim counts from the next round.', disabled: true, action: null };
-  }
+  if (s.saved) return { label: s.hero === me ? 'You did it' : 'Saved this round', sub: null, hint: null, disabled: true, action: null };
+  if (s.roundSupply === 0n) return { label: 'Nothing to save yet', sub: null, hint: null, disabled: true, action: null };
   if (account.balance < live.cost) {
     // When does the falling cost reach this balance?
     const needPpm = Number((account.balance * 1_000_000n) / s.roundSupply);
-    let hint: ReactNode = 'The cost is more than you hold, and it will not fall far enough this round.';
+    let hint = 'Costs more than you hold.';
     if (needPpm >= config.minCostPpm + 1) {
       const span = config.maxCostPpm - config.minCostPpm;
       const at = span > 0 ? (config.maxCostPpm - needPpm) / span : 0;
       const roundMs = Number(config.roundNs / 1_000_000n);
-      hint = `The cost is more than you hold. It falls within reach at about ${formatCountdown((1 - at) * roundMs)} left.`;
+      hint = `Within reach at ${formatCountdown((1 - at) * roundMs)} left.`;
     }
     return { label: "I'll do it", sub: null, hint, disabled: true, action: null };
   }
   return {
     label: pending === 'volunteer' ? 'Doing it…' : "I'll do it",
-    sub: `burn ${amount(live.cost)} NOTIT · ${account.isIt ? 'you are already It' : 'become It'}`,
+    sub: `burn ${amount(live.cost)} · ${account.isIt ? 'already It' : 'become It'}`,
     hint: null,
     disabled: pending !== null,
     action: 'volunteer',
@@ -374,7 +248,6 @@ function ctaFor(snap: GameSnapshot, live: Live, mode: Mode, pending: Game['pendi
 interface Props {
   game: Game;
   snap: GameSnapshot;
-  mode: Mode;
   /** Set in Testnet mode. */
   chain: ChainUi | null;
   flash: RoundClose | null;
@@ -382,12 +255,11 @@ interface Props {
   heads: number;
 }
 
-export function HeroSlab({ game, snap, mode, chain, flash, heads }: Props) {
+export function HeroSlab({ game, snap, chain, flash, heads }: Props) {
   const live = useLive(game);
   const { state: s, config, accountId: me } = snap;
   const save = s.saved ? currentSave(snap) : null;
-  const cta = ctaFor(snap, live, mode, game.pending);
-  const cutPct = formatPpm(config.cutPpm);
+  const cta = ctaFor(snap, live, game.pending);
   const countdownText = formatCountdown(live.msLeft);
   const nothingToSave = s.roundSupply === 0n;
 
@@ -403,45 +275,20 @@ export function HeroSlab({ game, snap, mode, chain, flash, heads }: Props) {
     return () => window.clearInterval(t);
   }, [s.round, s.saved]);
 
+  // One state line. The hot seat says who is It and the outcomes say what is at stake.
   let stateLine: ReactNode;
-  let subLine: ReactNode;
   if (s.roundSupply === 0n) {
     stateLine = 'No tokens in play yet.';
-    subLine = 'This round has nothing to save. The next one will.';
   } else if (s.saved && s.hero) {
     stateLine = (
       <>
-        Saved by <Who id={s.hero} me={me} />
-        {save ? <> with {formatCountdown(save.msLeft)} left</> : null}.
+        Saved by <Who id={s.hero} me={me} />.
       </>
     );
-    subLine = (
-      <>
-        {save ? <>{s.hero === me ? 'You' : 'They'} burned {amount(save.cost)} NOTIT. </> : null}
-        Nobody pays this round. {s.hero === me ? 'You are' : <><Who id={s.hero} me={me} /> is</>} It now.
-      </>
-    );
-  } else if (s.armed && s.it) {
-    stateLine = 'Nobody has stepped up.';
-    subLine = (
-      <>
-        If the clock runs out, everyone pays {cutPct} to{' '}
-        {s.it === me ? (
-          <b>you</b>
-        ) : (
-          <b>
-            <Who id={s.it} me={me} />
-          </b>
-        )}
-        .
-      </>
-    );
-  } else if (s.it && s.collapseRun >= config.maxCollapseRun) {
+  } else if (s.it && !s.armed && s.collapseRun >= config.maxCollapseRun) {
     stateLine = 'The game is asleep.';
-    subLine = 'Volunteer and you become It: the next unsaved round pays you.';
   } else {
     stateLine = 'Nobody has stepped up.';
-    subLine = 'Nobody is It yet, so nothing is charged. The first to volunteer becomes It.';
   }
 
   // Testnet with nobody signed in (or a guest sign-up under way): show the sign-in block.
@@ -479,14 +326,13 @@ export function HeroSlab({ game, snap, mode, chain, flash, heads }: Props) {
             {spoken}
           </p>
           <p className="slab__state">{stateLine}</p>
-          <p className="slab__sub">{subLine}</p>
         </div>
 
         <div className="slab__act">
           <div className="cost">
-            <span className="cost__label">{s.saved ? 'This round is paid for' : 'Cost to do it right now'}</span>
+            <span className="cost__label">{s.saved ? 'Burned' : 'Cost now'}</span>
             {s.saved ? (
-              <span className="cost__value cost__value--done">{save ? <Digits text={amount(save.cost)} /> : '—'} <small>NOTIT burned</small></span>
+              <span className="cost__value cost__value--done">{save ? <Digits text={amount(save.cost)} /> : '—'} <small>NOTIT</small></span>
             ) : nothingToSave ? (
               <span className="cost__value">—</span>
             ) : (
@@ -494,13 +340,6 @@ export function HeroSlab({ game, snap, mode, chain, flash, heads }: Props) {
                 <Digits text={amount(live.cost)} /> <small>NOTIT</small>
               </span>
             )}
-            <span className="cost__pct">
-              {s.saved
-                ? `Next round starts again at ${formatPpm(config.maxCostPpm)} of supply.`
-                : nothingToSave
-                  ? `Nothing to save yet. From the next round: ${formatPpm(config.maxCostPpm)} of supply, falling to ${formatPpm(config.minCostPpm)}.`
-                  : `${formatShare(live.cost, s.roundSupply)} of supply, falling from ${formatPpm(config.maxCostPpm)} to ${formatPpm(config.minCostPpm)}`}
-            </span>
           </div>
 
           {signUp && chain ? (
@@ -521,22 +360,15 @@ export function HeroSlab({ game, snap, mode, chain, flash, heads }: Props) {
               ) : (
                 cta.hint && <p className="cta__hint">{cta.hint}</p>
               )}
-              {chain && game.pending && <p className="cta__hint">Sending to the network. This takes a few seconds.</p>}
               {chain && !game.pending && game.lastTx && (
                 <TxLink
                   chain={chain}
                   hash={game.lastTx.hash}
-                  label={
-                    game.lastTx.ok
-                      ? game.lastTx.action === 'claim'
-                        ? 'Claim confirmed.'
-                        : 'You did it. Confirmed on chain.'
-                      : 'The network refused it.'
-                  }
+                  label={game.lastTx.ok ? (game.lastTx.action === 'claim' ? 'Claimed' : 'Confirmed') : 'Refused'}
                 />
               )}
               {chain && !game.pending && !game.lastTx && chain.state.guest.claimTx && (
-                <TxLink chain={chain} hash={chain.state.guest.claimTx} label="Guest account ready, claim confirmed." />
+                <TxLink chain={chain} hash={chain.state.guest.claimTx} label="Claimed" />
               )}
             </>
           )}
