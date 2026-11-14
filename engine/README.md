@@ -4,7 +4,7 @@ The rules engine and simulation lab for Not It ($NOTIT), in TypeScript with BigI
 
 - `src/engine.ts` is a literal transcription of [`docs/SPEC.md`](../docs/SPEC.md) v2 (§2–§8): the `NotIt` class, `Config`, `FAST`, `LIVE`, `NotItError`. It reproduces the contract's integer arithmetic exactly; `snapshot()` is the canonical JSON a differential test compares with the contract.
 - `src/strategies.ts` and `src/sim.ts` are a deterministic simulator: seeded agents with balances and strategies play rounds against the real engine.
-- `src/experiments.ts` holds the lab experiments (`runBystander`, `runWhoPays`, `runDispersed`, `runMixedCrowd`) and `runLab` / `formatLab` / `labToJson`.
+- `src/experiments.ts` holds the lab experiments (`runBystander`, `runWhoPays`, `runDispersed`, `runMixedCrowd`, `runForwardLooking`) and `runLab` / `formatLab` / `labToJson`. Experiment A compares the simulation with the equilibrium of the deployed rule, where only the first volunteer pays (`firstPaysEquilibrium` in `src/strategies.ts`); the textbook formula is kept as `classicDilemma`.
 - `src/lab.ts` is the command-line entry: it prints the tables and writes `out/lab.json`.
 - `src/scenarios.ts` generates `out/scenarios.json`: seeded call sequences with expected error codes and snapshots, for replaying against the Rust contract.
 
@@ -16,7 +16,7 @@ From the repository root:
 
 ```sh
 npm install
-npm test -w engine          # node:test, 49 tests
+npm test -w engine          # node:test, 52 tests
 npm run typecheck -w engine # tsc --noEmit
 npm run lab                 # prints the tables, writes engine/out/lab.json (about 3 s)
 npm run scenarios -w engine # writes engine/out/scenarios.json (687 KB)

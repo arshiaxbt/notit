@@ -31,7 +31,7 @@ Not It is an NEP-141 token with one game built into the contract:
 
 The track asks for memecoins "where the meme does something" and says entries are "judged on the mechanic, not the chart". Many token mechanics are accounting illusions: cutting or paying every holder by the same percentage changes nobody's share of the supply.
 
-Not It is built so that every event is a real transfer of ownership. A save moves value from the volunteer to everyone else (the burn). A collapse moves value from everyone to It. That makes each round a genuine volunteer's dilemma: everyone is better off if somebody acts, and everyone would rather it were somebody else. [docs/MECHANISM.md](docs/MECHANISM.md) works through the incentives and lists the weaknesses.
+Not It is built so that every event is a real transfer of ownership. A save moves value from the volunteer to everyone else (the burn). A collapse moves value from everyone to It. For a large holder each round is a volunteer's dilemma: every holder except It is better off if somebody acts, and would rather it were somebody else. For everyone else it is a contest for a seat. Stated without the pitch: a recurring Dutch auction for a seat that collects 15 % from every other holder whenever a round finds no bidder; zero-sum in ownership, and close to zero expected value when holders compete. [docs/MECHANISM.md](docs/MECHANISM.md) derives that, compares it with Fomo3D, and lists the objections we know of.
 
 ## How NEAR fits in
 
@@ -64,24 +64,26 @@ npm ci
 npm run lab
 ```
 
-You should see four tables. The first compares the simulated failure rate with the theory in docs/MECHANISM.md; the output is deterministic, and `npm run --silent lab` matches [docs/lab-output.txt](docs/lab-output.txt) byte for byte:
+You should see five tables (A, B, B2, C, D). The first compares the simulated share of unsaved rounds with the equilibrium derived in docs/MECHANISM.md; the output is deterministic, and `npm run --silent lab` matches [docs/lab-output.txt](docs/lab-output.txt) byte for byte:
 
 ```
 A. Bystander effect - N equal players, all mixedFinalBlock, 2000 independent one-round trials each (seed 1001)
-   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost.
-   q = c / (cut * x);  p = 1 - q^(1/(N-1));  theory P(fail) = q^(N/(N-1)), or 1 if q >= 1
+   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost, q = c / (cut * x).
+   Under the deployed rule only the first volunteer pays, so holders volunteer more readily than in the textbook dilemma.
+   Equilibrium p solves q * (1 - (1-p)^N) / (N*p) = (1-p)^(N-1);  P(fail) = (1-p)^N, or 1 if q >= 1.
+   The simulation plays that p, so agreement checks the arithmetic and the engine, not that people behave this way.
 
-  N       q       p  theory P(fail)  simulated     diff
----  ------  ------  --------------  ---------  -------
-  3  0.0533  0.7692          0.0123     0.0095  -0.0028
-  5  0.0799  0.4684          0.0425     0.0460  +0.0035
- 10  0.1464  0.1922          0.1183     0.1110  -0.0073
- 20  0.2796  0.0649          0.2614     0.2710  +0.0096
- 30  0.4127  0.0301          0.4003     0.3995  -0.0008
- 45  0.6124  0.0111          0.6056     0.6050  -0.0006
- 60  0.8121  0.0035          0.8093     0.7930  -0.0163
- 75  1.0118  0.0000          1.0000     1.0000   0.0000
-100  1.3446  0.0000          1.0000     1.0000   0.0000
+  N       q       p  equilibrium P(fail)  simulated     diff  if every volunteer paid
+---  ------  ------  -------------------  ---------  -------  -----------------------
+  3  0.0533  0.8562               0.0030     0.0025  -0.0005                   0.0123
+  5  0.0799  0.5966               0.0107     0.0110  +0.0003                   0.0425
+ 10  0.1464  0.2834               0.0357     0.0365  +0.0008                   0.1183
+ 20  0.2796  0.1066               0.1048     0.0980  -0.0068                   0.2614
+ 30  0.4127  0.0523               0.1995     0.1955  -0.0040                   0.4003
+ 45  0.6124  0.0205               0.3946     0.4170  +0.0224                   0.6056
+ 60  0.8121  0.0068               0.6642     0.6680  +0.0038                   0.8093
+ 75  1.0118  0.0000               1.0000     1.0000   0.0000                   1.0000
+100  1.3446  0.0000               1.0000     1.0000   0.0000                   1.0000
 ```
 
 ### 2. Run the engine tests
@@ -90,7 +92,7 @@ A. Bystander effect - N equal players, all mixedFinalBlock, 2000 independent one
 npm test
 ```
 
-You should see `pass 49` and `fail 0`.
+You should see `pass 52` and `fail 0`.
 
 ### 3. Run the contract tests
 
@@ -145,7 +147,7 @@ Open https://arshiaxbt.github.io/notit/.
 3. Press **I'll do it**. You should see "Sending", then your face move to the middle of the ring: you are It.
 4. Do nothing for a round. If nobody else volunteers, you should see the ring flash red, a coin travel from every face to yours, and "paid to It" rise by 15 % of everyone else's balance.
 5. Switch to **Demo** in the header for the same game simulated in your browser on a fast clock, with no network.
-6. Open the **Lab** tab and move the crowd-size slider. You should see the share of unsaved rounds rise with the crowd, next to the theory curve.
+6. Open the **Lab** tab and move the crowd-size slider. You should see the share of unsaved rounds rise with the crowd, next to the equilibrium curve.
 
 To check a locked guest key without playing, read the keys of an account that went through this flow:
 
@@ -219,7 +221,7 @@ A small fleet of bots (`bots/`) plays both deployments so that rounds are someti
 - **Two independent implementations.** The contract and the TypeScript engine were written separately from docs/SPEC.md. A generator in the engine produces 42 scenarios (2,075 steps: claims, volunteers, transfers, unregistrations, long idle gaps, refused actions). A contract test replays them and requires the stored state to match integer for integer.
 - **Unit tests** for each rule in the specification, on both sides.
 - **Integration test** on NEAR Sandbox with the compiled contract.
-- **Independent reviews.** Before the contract was written, the design was reviewed as a mechanism; that review found that the first version's uniform cut was economically neutral, which led to the current rules (see docs/MECHANISM.md). Before the contract was locked, a separate adversarial code review fuzzed it and exercised it on a sandbox node; it found no way to block the contract or to create or take tokens, and its smaller findings were fixed or are listed as limits. Its fuzz test is in the repository (`contract/src/fuzz.rs`): random operations over 7 parameter sets, including extreme ones and transfer-and-call refunds, with invariants checked after every step. `cargo test` runs a quick version; the audit ran `NOTIT_FUZZ_SEEDS=40 NOTIT_FUZZ_STEPS=700`.
+- **Independent reviews.** Before the contract was written, the design was reviewed as a mechanism; that review found that the first version's uniform cut was economically neutral, which led to the current rules. The rules as deployed were then reviewed again by a game theorist, who found that the lab's first bystander formula was the textbook one (every volunteer pays) and not the equilibrium of our rule (only the first pays), and that two claims in the write-up were wrong; the lab and docs/MECHANISM.md were corrected, and the corrections are marked there. Before the contract was locked, a separate adversarial code review fuzzed it and exercised it on a sandbox node; it found no way to block the contract or to create or take tokens, and its smaller findings were fixed or are listed as limits. Its fuzz test is in the repository (`contract/src/fuzz.rs`): random operations over 7 parameter sets, including extreme ones and transfer-and-call refunds, with invariants checked after every step. `cargo test` runs a quick version; the audit ran `NOTIT_FUZZ_SEEDS=40 NOTIT_FUZZ_STEPS=700`.
 - **CI** runs all of the above and checks that the lab output is reproducible (`.github/workflows/ci.yml`).
 
 ## Limits

@@ -1,20 +1,22 @@
 NOT IT - SIMULATION LAB
 
 A. Bystander effect - N equal players, all mixedFinalBlock, 2000 independent one-round trials each (seed 1001)
-   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost.
-   q = c / (cut * x);  p = 1 - q^(1/(N-1));  theory P(fail) = q^(N/(N-1)), or 1 if q >= 1
+   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost, q = c / (cut * x).
+   Under the deployed rule only the first volunteer pays, so holders volunteer more readily than in the textbook dilemma.
+   Equilibrium p solves q * (1 - (1-p)^N) / (N*p) = (1-p)^(N-1);  P(fail) = (1-p)^N, or 1 if q >= 1.
+   The simulation plays that p, so agreement checks the arithmetic and the engine, not that people behave this way.
 
-  N       q       p  theory P(fail)  simulated     diff
----  ------  ------  --------------  ---------  -------
-  3  0.0533  0.7692          0.0123     0.0095  -0.0028
-  5  0.0799  0.4684          0.0425     0.0460  +0.0035
- 10  0.1464  0.1922          0.1183     0.1110  -0.0073
- 20  0.2796  0.0649          0.2614     0.2710  +0.0096
- 30  0.4127  0.0301          0.4003     0.3995  -0.0008
- 45  0.6124  0.0111          0.6056     0.6050  -0.0006
- 60  0.8121  0.0035          0.8093     0.7930  -0.0163
- 75  1.0118  0.0000          1.0000     1.0000   0.0000
-100  1.3446  0.0000          1.0000     1.0000   0.0000
+  N       q       p  equilibrium P(fail)  simulated     diff  if every volunteer paid
+---  ------  ------  -------------------  ---------  -------  -----------------------
+  3  0.0533  0.8562               0.0030     0.0025  -0.0005                   0.0123
+  5  0.0799  0.5966               0.0107     0.0110  +0.0003                   0.0425
+ 10  0.1464  0.2834               0.0357     0.0365  +0.0008                   0.1183
+ 20  0.2796  0.1066               0.1048     0.0980  -0.0068                   0.2614
+ 30  0.4127  0.0523               0.1995     0.1955  -0.0040                   0.4003
+ 45  0.6124  0.0205               0.3946     0.4170  +0.0224                   0.6056
+ 60  0.8121  0.0068               0.6642     0.6680  +0.0038                   0.8093
+ 75  1.0118  0.0000               1.0000     1.0000   0.0000                   1.0000
+100  1.3446  0.0000               1.0000     1.0000   0.0000                   1.0000
 
 B. Who pays - 50 holders, Pareto balances (alpha 1.16), 500 rounds per strategy (seed 2002)
    Both runs start armed: the largest holder (holder-14) volunteered in a setup round.
@@ -76,3 +78,19 @@ strategy   holders  saves  burned (NOTIT)  collected (NOTIT)  rejected  missed  
 altruist         4     12        3,889.90               0.00      1154       0        10.0%       0.0%
 sniper           6    795       28,786.92          30,278.16      2206     792        15.0%     100.0%
 freeRider       30      0            0.00               0.00         0       0        75.0%       0.0%
+
+D. Forward-looking holders - a bound on unsaved rounds when holders value being It
+   If being It is worth W at round open and a round goes unsaved with chance pi: W = pi * (cut * S + W), so W = cut * S * pi / (1 - pi).
+   Free entry in the final block (a transaction that loses the race costs nothing) forces W <= min_cost * S.
+   Bound: pi <= min_cost / (cut + min_cost) = 0.2% / 15.2% = 1.32%, for risk-neutral, equally fast, non-colluding holders.
+   Simulated: equal holders, all throneAware, started armed, 500 rounds each (seed 2502).
+
+holders  share each  saved  collapsed  dormant  unsaved rate  bound  within bound
+-------  ----------  -----  ---------  -------  ------------  -----  ------------
+     20       5.00%    500          0        0         0.00%  1.32%           yes
+     50       2.00%    500          0        0         0.00%  1.32%           yes
+    100       1.00%    495          5        0         1.00%  1.32%           yes
+    200       0.50%    480         20        0         4.00%  1.32%            no
+
+   throneAware is a rule of thumb, not the equilibrium behind the bound: it prices the throne from the last 20 rounds,
+   so where no holder is large enough to save myopically it lets a round fail every 20-odd rounds and exceeds the bound.

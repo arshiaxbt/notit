@@ -6,6 +6,7 @@ import {
   labToJson,
   runBystander,
   runDispersed,
+  runForwardLooking,
   runLab,
   runMixedCrowd,
   runWhoPays,
@@ -19,19 +20,28 @@ test('lab output is deterministic: two full runs give the same JSON and the same
   assert.equal(formatLab(second), formatLab(first));
   // The JSON is plain data (bigints as decimal strings) and round-trips.
   const parsed = JSON.parse(json);
-  assert.deepEqual(Object.keys(parsed), ['bystander', 'whoPays', 'dispersed', 'mixedCrowd']);
+  assert.deepEqual(Object.keys(parsed), ['bystander', 'whoPays', 'dispersed', 'mixedCrowd', 'forwardLooking']);
   assert.equal(typeof parsed.mixedCrowd.supplyStart, 'string');
   assert.equal(labToJson(parsed), json);
 
-  // A. Simulation tracks the §11 theory; the big crowds never save.
+  // A. Simulation tracks the first-pays equilibrium; the big crowds never save.
   assert.deepEqual(
     first.bystander.rows.map((r) => r.n),
     [3, 5, 10, 20, 30, 45, 60, 75, 100],
   );
   for (const r of first.bystander.rows) {
     assert.equal(r.trials, 2000);
-    assert.ok(Math.abs(r.diff) < 0.035, `N=${r.n}: theory ${r.theory}, simulated ${r.simulated}`);
+    // Within sampling error of the equilibrium: 3.5 standard errors of a binomial share.
+    const se = Math.sqrt((r.equilibriumFail * (1 - r.equilibriumFail)) / r.trials);
+    assert.ok(Math.abs(r.diff) <= 3.5 * se, `N=${r.n}: equilibrium ${r.equilibriumFail}, simulated ${r.simulated}`);
+    assert.equal(r.diff, r.simulated - r.equilibriumFail);
     assert.equal(r.simulated, r.failed / r.trials);
+    // Older field names still carry the equilibrium values.
+    assert.equal(r.p, r.equilibriumP);
+    assert.equal(r.theory, r.equilibriumFail);
+    // Only the first volunteer pays, so the round fails less often than in the textbook dilemma.
+    if (r.q < 1) assert.ok(r.equilibriumFail < r.classicFail && r.equilibriumP > r.classicP);
+    else assert.deepEqual([r.equilibriumFail, r.classicFail, r.equilibriumP], [1, 1, 0]);
   }
   const theory = first.bystander.rows.map((r) => r.theory);
   for (let i = 1; i < theory.length; i++) assert.ok(theory[i]! >= theory[i - 1]!);
@@ -69,6 +79,22 @@ test('lab output is deterministic: two full runs give the same JSON and the same
   assert.ok(throne.totalBurned > 0n);
   assert.ok(throne.itSupplyShareEnd < 0.5);
 
+  // D. The free-entry bound from the config, next to the throneAware crowds.
+  const f = first.forwardLooking;
+  assert.ok(Math.abs(f.bound - 0.002 / 0.152) < 1e-15); // 1.32 % with the deployed parameters
+  assert.deepEqual(
+    f.runs.map((r) => r.holders),
+    [20, 50, 100, 200],
+  );
+  for (const r of f.runs) {
+    assert.equal(r.saved + r.collapsed + r.dormant, f.rounds);
+    assert.equal(r.unsavedRate, (r.collapsed + r.dormant) / f.rounds);
+    assert.equal(r.withinBound, r.unsavedRate <= f.bound);
+  }
+  assert.ok(f.runs.slice(0, 3).every((r) => r.withinBound));
+  // The 100-holder run is the throneAware run of B2.
+  assert.ok(Math.abs(f.runs[2]!.unsavedRate - (1 - throne.savedShare)) < 1e-12);
+
   // C. The free riders lose share to the accounts that volunteer.
   const c = first.mixedCrowd;
   assert.equal(c.holders, 40);
@@ -99,6 +125,11 @@ test('experiments take custom parameters', () => {
   assert.equal(d.initialIt, 'holder-20');
   assert.equal(d.runs.length, 1);
   assert.equal(d.runs[0]!.savedShare, 1); // 5 % each is above the 1.33 % threshold
+
+  const f = runForwardLooking({ holders: [10], rounds: 50, config: { minCostPpm: 3_000, cutPpm: 100_000 } });
+  assert.ok(Math.abs(f.bound - 0.003 / 0.103) < 1e-15);
+  assert.equal(f.runs.length, 1);
+  assert.equal(f.runs[0]!.holderShare, 0.1);
 
   const c = runMixedCrowd({ altruists: 2, snipers: 2, freeRiders: 6, rounds: 100, seed: 4, h: 0.5, missRate: 0.1 });
   assert.equal(c.holders, 10);

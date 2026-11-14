@@ -4,6 +4,8 @@ import {
   FAST,
   UNIT,
   altruist,
+  classicDilemma,
+  firstPaysEquilibrium,
   freeRider,
   gini,
   labToJson,
@@ -72,25 +74,103 @@ test('slots run from the round opening to the final nanosecond', () => {
   for (let s = 1; s < 20; s++) assert.ok(slotElapsedNs(s, 20, R) > slotElapsedNs(s - 1, 20, R));
 });
 
-test('mixed equilibrium formulas (§11)', () => {
-  assert.equal(mixedEquilibriumP(1, 10), 0);
-  assert.equal(mixedEquilibriumP(1.5, 10), 0);
-  assert.equal(mixedEquilibriumP(Number.NaN, 10), 0);
-  assert.equal(mixedEquilibriumP(Number.POSITIVE_INFINITY, 10), 0);
-  assert.equal(mixedEquilibriumP(0.5, 1), 1);
-  assert.equal(mixedEquilibriumP(0.25, 2), 0.75);
-  assert.equal(mixedEquilibriumP(0.25, 3), 0.5);
-  assert.equal(mixedEquilibriumFailure(0.25, 3), 0.125); // (1 − p)^n = 0.5^3
-  assert.equal(mixedEquilibriumFailure(1.2, 3), 1);
-  assert.equal(mixedEquilibriumFailure(0.5, 1), 0);
+/** Left side minus right side of the indifference equation, evaluated without cancellation. */
+function indifference(n: number, q: number, p: number): number {
+  const l = Math.log1p(-p);
+  return (q * -Math.expm1(n * l)) / (n * p) - Math.exp((n - 1) * l);
+}
+
+test('first-pays equilibrium: the solver satisfies the indifference equation', () => {
+  for (const [n, q] of [
+    [2, 0.5],
+    [3, 0.0533],
+    [5, 0.9],
+    [10, 0.1464],
+    [30, 0.4127],
+    [60, 0.8121],
+    [100, 0.999],
+    [300, 0.37],
+    [7, 1e-6],
+  ] as const) {
+    const { p, fail } = firstPaysEquilibrium(n, q);
+    assert.ok(p > 0 && p < 1, `n=${n} q=${q}: p=${p}`);
+    assert.ok(Math.abs(indifference(n, q, p)) < 1e-9, `n=${n} q=${q}: residual ${indifference(n, q, p)}`);
+    assert.ok(Math.abs(fail - Math.pow(1 - p, n)) < 1e-12);
+    // Only the first submitter pays, so holders volunteer more readily than in the textbook dilemma.
+    const classic = classicDilemma(n, q);
+    assert.ok(p > classic.p && fail < classic.fail, `n=${n} q=${q}`);
+  }
+  // Closed form for two holders: q(1 + u)/2 = u with u = 1 − p.
+  const two = firstPaysEquilibrium(2, 0.5);
+  assert.ok(Math.abs(two.p - 2 / 3) < 1e-12 && Math.abs(two.fail - 1 / 9) < 1e-12);
+  // The values of the review: about 0.3 %, 3.6 %, 20 %, 66 % at 3, 10, 30, 60 players.
+  assert.ok(Math.abs(firstPaysEquilibrium(3, 0.0533).fail - 0.003) < 0.0005);
+  assert.ok(Math.abs(firstPaysEquilibrium(10, 0.1464).fail - 0.0357) < 0.0005);
+  assert.ok(Math.abs(firstPaysEquilibrium(30, 0.4127).fail - 0.1995) < 0.0005);
+  assert.ok(Math.abs(firstPaysEquilibrium(60, 0.8121).fail - 0.6642) < 0.0005);
+});
+
+test('first-pays equilibrium: the chance to pay is E[1/(K+1)] for K ~ Binomial(n−1, p)', () => {
+  for (const [n, p] of [
+    [2, 0.3],
+    [5, 0.6],
+    [12, 0.07],
+    [40, 0.02],
+  ] as const) {
+    let expected = 0;
+    let binom = 1; // C(n−1, k)
+    for (let k = 0; k < n; k++) {
+      expected += (binom * Math.pow(p, k) * Math.pow(1 - p, n - 1 - k)) / (k + 1);
+      binom = (binom * (n - 1 - k)) / (k + 1);
+    }
+    assert.ok(Math.abs(expected - (1 - Math.pow(1 - p, n)) / (n * p)) < 1e-12);
+  }
+});
+
+test('first-pays equilibrium: boundaries and monotonicity', () => {
+  // q ≥ 1: the cheapest save costs more than a collapse; nobody volunteers.
+  for (const q of [1, 1.0118, 5, Number.POSITIVE_INFINITY, Number.NaN]) {
+    assert.deepEqual(firstPaysEquilibrium(10, q), { p: 0, fail: 1 });
+    assert.deepEqual(classicDilemma(10, q), { p: 0, fail: 1 });
+  }
+  // A lone holder always pays when it submits: it volunteers for sure whenever q < 1.
+  assert.deepEqual(firstPaysEquilibrium(1, 0.5), { p: 1, fail: 0 });
+  assert.deepEqual(firstPaysEquilibrium(4, 0), { p: 1, fail: 0 });
+  assert.deepEqual(firstPaysEquilibrium(0, 0.5), { p: 0, fail: 1 });
+  // q just below 1: p is tiny but positive, and the round almost surely fails.
+  const edge = firstPaysEquilibrium(50, 1 - 1e-9);
+  assert.ok(edge.p > 0 && edge.p < 1e-9 && edge.fail > 0.999999 && edge.fail < 1);
+  assert.ok(Math.abs(indifference(50, 1 - 1e-9, edge.p)) < 1e-12);
+
+  // As in experiment A: q grows with the crowd, q = min_cost × (n + 1) / cut. P(fail) rises with n and reaches 1.
+  let previous = 0;
+  for (let n = 2; n <= 90; n++) {
+    const { fail } = firstPaysEquilibrium(n, (0.002 * (n + 1)) / 0.15);
+    assert.ok(fail >= previous, `P(fail) fell at n=${n}`);
+    assert.ok(n < 74 ? fail < 1 : fail === 1, `n=${n}: ${fail}`);
+    previous = fail;
+  }
+  // For a fixed q, a bigger crowd fails more often too, and p falls.
+  for (let n = 2; n < 60; n++) {
+    assert.ok(firstPaysEquilibrium(n + 1, 0.4).fail > firstPaysEquilibrium(n, 0.4).fail);
+    assert.ok(firstPaysEquilibrium(n + 1, 0.4).p < firstPaysEquilibrium(n, 0.4).p);
+  }
+});
+
+test('the textbook formula is kept as classicDilemma; the mixedEquilibrium* helpers follow the deployed rule', () => {
+  assert.deepEqual(classicDilemma(2, 0.25), { p: 0.75, fail: 0.0625 });
+  assert.equal(classicDilemma(3, 0.25).p, 0.5);
+  assert.equal(classicDilemma(3, 0.25).fail, 0.125); // (1 − p)^n = 0.5^3
+  assert.deepEqual(classicDilemma(1, 0.5), { p: 1, fail: 0 });
   for (const [q, n] of [
     [0.3, 5],
     [0.8, 60],
   ] as const) {
-    const p = mixedEquilibriumP(q, n);
-    assert.ok(Math.abs(Math.pow(1 - p, n) - mixedEquilibriumFailure(q, n)) < 1e-12);
-    // Indifference: the cost equals the expected loss avoided, q = (1 − p)^(n − 1).
-    assert.ok(Math.abs(Math.pow(1 - p, n - 1) - q) < 1e-12);
+    const c = classicDilemma(n, q);
+    assert.ok(Math.abs(Math.pow(1 - c.p, n) - c.fail) < 1e-12);
+    assert.ok(Math.abs(Math.pow(1 - c.p, n - 1) - q) < 1e-12); // its indifference: q = (1 − p)^(n − 1)
+    assert.equal(mixedEquilibriumP(q, n), firstPaysEquilibrium(n, q).p);
+    assert.equal(mixedEquilibriumFailure(q, n), firstPaysEquilibrium(n, q).fail);
   }
 });
 
@@ -249,7 +329,7 @@ test('simulate: resetEachRound plays independent trials', () => {
   assert.equal(s.dormant, 0);
   // Every trial opens with the same supply: holdings never drift.
   assert.ok(s.timeline.every((t) => t.supply === s.supplyStart));
-  assert.ok(s.collapsed > 10 && s.collapsed < 100); // theory: about 12 %
+  assert.ok(s.collapsed >= 3 && s.collapsed <= 35, `collapsed ${s.collapsed}`); // equilibrium: about 3.6 % of 400
   assert.ok(s.savedBySlot.slice(0, 19).every((x) => x === 0));
 });
 

@@ -5,7 +5,7 @@
 import { FAST, UNIT } from './engine.ts';
 import { mulberry32, simulate } from './sim.ts';
 import type { AgentSpec, SimConfig, SimResult } from './sim.ts';
-import { mixedEquilibriumFailure, mixedEquilibriumP } from './strategies.ts';
+import { classicDilemma, firstPaysEquilibrium } from './strategies.ts';
 import type { StrategySpec } from './strategies.ts';
 
 // ---------------------------------------------------------------------------
@@ -78,14 +78,22 @@ export interface BystanderRow {
   finalCost: bigint;
   /** q = c / (cut × x) (§11), from the two actual values above. */
   q: number;
-  /** Equilibrium probability that one player volunteers: 1 − q^(1/(n−1)). */
-  p: number;
-  /** Theory P(fail) = q^(n/(n−1)); 1 if q ≥ 1. */
-  theory: number;
-  /** Simulated share of trials nobody saved. */
+  /** First-pays equilibrium (the deployed rule): probability that one player volunteers. */
+  equilibriumP: number;
+  /** First-pays equilibrium: probability that nobody volunteers, (1 − p)^n; 1 if q ≥ 1. */
+  equilibriumFail: number;
+  /** Textbook dilemma, where every volunteer pays: p = 1 − q^(1/(n−1)). For comparison only. */
+  classicP: number;
+  /** Textbook dilemma: P(fail) = q^(n/(n−1)). For comparison only. */
+  classicFail: number;
+  /** Simulated share of trials nobody saved (the players play `equilibriumP`). */
   simulated: number;
-  /** simulated − theory. */
+  /** simulated − equilibriumFail. */
   diff: number;
+  /** Same as `equilibriumP` (older name). */
+  p: number;
+  /** Same as `equilibriumFail` (older name). */
+  theory: number;
   trials: number;
   failed: number;
 }
@@ -100,8 +108,12 @@ export interface BystanderResult {
  * N players with equal balances, all `mixedFinalBlock`, plus one extra account with
  * the same starting balance that became It in a setup round and never volunteers
  * again. Every trial is one armed round on a fresh engine, so the players stay equal
- * and the simulated failure rate is directly comparable with the one-shot theory of
- * §11, computed from the players' actual balance and the actual final-slot cost.
+ * and the simulated failure rate is directly comparable with the one-shot
+ * equilibrium, computed from the players' actual balance and the actual final-slot
+ * cost. Under the deployed rule only the first volunteer pays, so the equilibrium is
+ * `firstPaysEquilibrium`, not the textbook formula (reported alongside as `classic*`).
+ * The players play the equilibrium probability, so agreement checks the arithmetic
+ * and the engine, not that people behave this way.
  */
 export function runBystander(options: BystanderOptions = {}): BystanderResult {
   const ns = options.ns ?? [3, 5, 10, 20, 30, 45, 60, 75, 100];
@@ -126,16 +138,21 @@ export function runBystander(options: BystanderOptions = {}): BystanderResult {
     const playerBalance = sim.agents[0]!.balanceStart;
     const finalCost = sim.opening.costFinal;
     const q = Number(finalCost) / (cut * Number(playerBalance));
-    const theory = mixedEquilibriumFailure(q, n);
+    const eq = firstPaysEquilibrium(n, q);
+    const classic = classicDilemma(n, q);
     rows.push({
       n,
       playerBalance,
       finalCost,
       q,
-      p: mixedEquilibriumP(q, n),
-      theory,
+      equilibriumP: eq.p,
+      equilibriumFail: eq.fail,
+      classicP: classic.p,
+      classicFail: classic.fail,
       simulated: sim.failureRate,
-      diff: sim.failureRate - theory,
+      diff: sim.failureRate - eq.fail,
+      p: eq.p,
+      theory: eq.fail,
       trials,
       failed: sim.collapsed + sim.dormant,
     });
@@ -517,7 +534,111 @@ export function runMixedCrowd(options: MixedCrowdOptions = {}): MixedCrowdResult
 }
 
 // ---------------------------------------------------------------------------
-// The lab: all three with their fixed seeds, plus text and JSON rendering
+// D. Forward-looking holders
+// ---------------------------------------------------------------------------
+
+export interface ForwardLookingOptions {
+  /** Crowd sizes (equal holders, It included), one `throneAware` run each. Default [20, 50, 100, 200]. */
+  holders?: number[];
+  /** Default 500. */
+  rounds?: number;
+  /** Default 2502 (the 100-holder run is then the `throneAware` run of experiment B2). */
+  seed?: number;
+  /** Balance handed to every holder, base units. Default 1000 NOTIT. */
+  balance?: bigint;
+  slotsPerRound?: number;
+  config?: Partial<SimConfig>;
+}
+
+export interface ForwardLookingRun {
+  holders: number;
+  /** Each holder's share of the supply: 1 / holders. */
+  holderShare: number;
+  rounds: number;
+  saved: number;
+  collapsed: number;
+  dormant: number;
+  /** Share of rounds nobody saved: (collapsed + dormant) / rounds. */
+  unsavedRate: number;
+  /** unsavedRate ≤ bound. */
+  withinBound: boolean;
+}
+
+export interface ForwardLookingResult {
+  /** min_cost_ppm and cut_ppm as fractions. */
+  minCost: number;
+  cut: number;
+  /**
+   * Upper bound on the share of unsaved rounds with forward-looking holders:
+   * min_cost / (cut + min_cost).
+   */
+  bound: number;
+  rounds: number;
+  seed: number;
+  runs: ForwardLookingRun[];
+}
+
+/** The free-entry bound on the share of unsaved rounds: min_cost / (cut + min_cost). */
+export function forwardLookingBound(config?: Partial<SimConfig>): number {
+  const minCost = (config?.minCostPpm ?? FAST.minCostPpm) / 1e6;
+  const cut = (config?.cutPpm ?? FAST.cutPpm) / 1e6;
+  return minCost / (cut + minCost);
+}
+
+/**
+ * If being It is worth W when a round opens and π is the chance that a round goes
+ * unsaved, then W = π × (cut × S + W), so W = cut × S × π / (1 − π). Taking the throne
+ * in the final block costs min_cost × S and a transaction that loses the race costs
+ * nothing, so free entry forces W ≤ min_cost × S, hence π ≤ min_cost / (cut + min_cost).
+ * This is a bound for risk-neutral, equally fast, non-colluding holders. Next to it:
+ * the unsaved rate of `throneAware` crowds of equal holders, each started armed (the
+ * last holder volunteers in a setup round). `throneAware` is a rule of thumb, not
+ * that equilibrium: it prices the throne from the failures of the last 20 rounds, so
+ * in a crowd where nobody is large enough to save myopically it lets a round fail
+ * every 20-odd rounds and can exceed the bound.
+ */
+export function runForwardLooking(options: ForwardLookingOptions = {}): ForwardLookingResult {
+  const sizes = options.holders ?? [20, 50, 100, 200];
+  const rounds = options.rounds ?? 500;
+  const seed = options.seed ?? 2502;
+  const balance = options.balance ?? 1000n * UNIT;
+  const bound = forwardLookingBound(options.config);
+  const runs: ForwardLookingRun[] = sizes.map((holders) => {
+    const sim = simulate({
+      agents: Array.from({ length: holders }, (_, i) => ({
+        id: holderId(i, holders),
+        balance,
+        strategy: { kind: 'throneAware', patience: 1 },
+      })),
+      rounds,
+      seed,
+      slotsPerRound: options.slotsPerRound,
+      config: options.config,
+      initialIt: holders - 1,
+    });
+    return {
+      holders,
+      holderShare: 1 / holders,
+      rounds,
+      saved: sim.saved,
+      collapsed: sim.collapsed,
+      dormant: sim.dormant,
+      unsavedRate: sim.failureRate,
+      withinBound: sim.failureRate <= bound,
+    };
+  });
+  return {
+    minCost: (options.config?.minCostPpm ?? FAST.minCostPpm) / 1e6,
+    cut: (options.config?.cutPpm ?? FAST.cutPpm) / 1e6,
+    bound,
+    rounds,
+    seed,
+    runs,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The lab: all experiments with their fixed seeds, plus text and JSON rendering
 // ---------------------------------------------------------------------------
 
 export interface LabOptions {
@@ -525,6 +646,7 @@ export interface LabOptions {
   whoPays?: WhoPaysOptions;
   dispersed?: DispersedOptions;
   mixedCrowd?: MixedCrowdOptions;
+  forwardLooking?: ForwardLookingOptions;
 }
 
 export interface LabResult {
@@ -532,6 +654,7 @@ export interface LabResult {
   whoPays: WhoPaysResult;
   dispersed: DispersedResult;
   mixedCrowd: MixedCrowdResult;
+  forwardLooking: ForwardLookingResult;
 }
 
 export function runLab(options: LabOptions = {}): LabResult {
@@ -540,6 +663,7 @@ export function runLab(options: LabOptions = {}): LabResult {
     whoPays: runWhoPays(options.whoPays),
     dispersed: runDispersed(options.dispersed),
     mixedCrowd: runMixedCrowd(options.mixedCrowd),
+    forwardLooking: runForwardLooking(options.forwardLooking),
   };
 }
 
@@ -616,19 +740,22 @@ export function formatLab(lab: LabResult): string {
   out.push('NOT IT - SIMULATION LAB');
   out.push('');
   out.push(`A. Bystander effect - N equal players, all mixedFinalBlock, ${a.trials} independent one-round trials each (seed ${a.seed})`);
-  out.push('   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost.');
-  out.push('   q = c / (cut * x);  p = 1 - q^(1/(N-1));  theory P(fail) = q^(N/(N-1)), or 1 if q >= 1');
+  out.push('   One extra equal account became It in a setup round and never volunteers. x = player balance, c = final-slot cost, q = c / (cut * x).');
+  out.push('   Under the deployed rule only the first volunteer pays, so holders volunteer more readily than in the textbook dilemma.');
+  out.push('   Equilibrium p solves q * (1 - (1-p)^N) / (N*p) = (1-p)^(N-1);  P(fail) = (1-p)^N, or 1 if q >= 1.');
+  out.push('   The simulation plays that p, so agreement checks the arithmetic and the engine, not that people behave this way.');
   out.push('');
   out.push(
     ...table(
-      ['N', 'q', 'p', 'theory P(fail)', 'simulated', 'diff'],
+      ['N', 'q', 'p', 'equilibrium P(fail)', 'simulated', 'diff', 'if every volunteer paid'],
       a.rows.map((r) => [
         String(r.n),
         r.q.toFixed(4),
-        r.p.toFixed(4),
-        r.theory.toFixed(4),
+        r.equilibriumP.toFixed(4),
+        r.equilibriumFail.toFixed(4),
         r.simulated.toFixed(4),
         signed(r.diff, 4),
+        r.classicFail.toFixed(4),
       ]),
     ),
   );
@@ -692,5 +819,34 @@ export function formatLab(lab: LabResult): string {
       [0],
     ),
   );
+  out.push('');
+
+  const f = lab.forwardLooking;
+  out.push('D. Forward-looking holders - a bound on unsaved rounds when holders value being It');
+  out.push('   If being It is worth W at round open and a round goes unsaved with chance pi: W = pi * (cut * S + W), so W = cut * S * pi / (1 - pi).');
+  out.push('   Free entry in the final block (a transaction that loses the race costs nothing) forces W <= min_cost * S.');
+  out.push(
+    `   Bound: pi <= min_cost / (cut + min_cost) = ${pct(f.minCost, 1)} / ${pct(f.cut + f.minCost, 1)} = ${pct(f.bound, 2)}, for risk-neutral, equally fast, non-colluding holders.`,
+  );
+  out.push(`   Simulated: equal holders, all throneAware, started armed, ${f.rounds} rounds each (seed ${f.seed}).`);
+  out.push('');
+  out.push(
+    ...table(
+      ['holders', 'share each', 'saved', 'collapsed', 'dormant', 'unsaved rate', 'bound', 'within bound'],
+      f.runs.map((r) => [
+        String(r.holders),
+        pct(r.holderShare, 2),
+        String(r.saved),
+        String(r.collapsed),
+        String(r.dormant),
+        pct(r.unsavedRate, 2),
+        pct(f.bound, 2),
+        r.withinBound ? 'yes' : 'no',
+      ]),
+    ),
+  );
+  out.push('');
+  out.push('   throneAware is a rule of thumb, not the equilibrium behind the bound: it prices the throne from the last 20 rounds,');
+  out.push('   so where no holder is large enough to save myopically it lets a round fail every 20-odd rounds and exceeds the bound.');
   return out.join('\n') + '\n';
 }
