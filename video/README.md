@@ -58,3 +58,19 @@ Rules the code follows: every frame is a pure function of `useCurrentFrame()`; n
 timers; footage through `<OffthreadVideo>` frozen on an explicit source frame, so speed ramps are
 exact and the speed badge shows the true rate; the font is the app's own Bricolage Grotesque variable
 file (weight and width axes), loaded with `@remotion/fonts`.
+
+## Sound
+
+The soundtrack is generated locally by `audio/make_audio.py`: narration with Kokoro (an open
+text-to-speech model, synthetic voice `af_heart`) and a ticking-clock sound bed and effects
+synthesised with numpy, placed on the film's own event frames. No samples or licensed music.
+
+```
+uv venv --python 3.12 venv && uv pip install --python venv/bin/python kokoro-onnx soundfile numpy
+# model files: kokoro-v1.0.onnx and voices-v1.0.bin from the kokoro-onnx releases page
+venv/bin/python audio/make_audio.py kokoro-v1.0.onnx voices-v1.0.bin soundtrack.wav
+ffmpeg -i out/demo.mp4 -i soundtrack.wav -map 0:v -map 1:a -c:v copy \
+  -af loudnorm=I=-16:TP=-1.5:LRA=9 -c:a aac -b:a 160k -movflags +faststart demo.mp4
+```
+
+`audio/soundtrack.m4a` is the track that is in `docs/media/demo.mp4`.
