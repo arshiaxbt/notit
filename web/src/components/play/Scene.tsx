@@ -681,7 +681,14 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
   // the name is cut to what fits (the whole name is in its title and in the tooltip).
   // On a phone the name stands without its ".testnet", at one length; elsewhere it is the usual shortening.
   const lineW = layout?.lineW ?? 320;
-  const lineName = layout?.compact || layout?.dock ? { max: NAME_MAX_LINE_COMPACT, keepSuffix: false } : { max: NAME_MAX, keepSuffix: true };
+  // Where the faces leave too little room for the long form, the short form is used, and where
+  // even that is tight the line is set a size smaller: the name is cut once, never clipped again.
+  const narrow = !!layout?.compact || !!layout?.dock;
+  const perChar = s.saved ? (narrow ? 9.6 : 11) : 9;
+  const words = s.saved ? 9 : 6;
+  const shortName = narrow || (words + NAME_MAX) * perChar > lineW;
+  const lineTight = shortName && (words + NAME_MAX_LINE_COMPACT) * perChar > lineW;
+  const lineName = shortName ? { max: NAME_MAX_LINE_COMPACT, keepSuffix: false } : { max: NAME_MAX, keepSuffix: true };
   let line: ReactNode;
   const savedByYou = s.saved && s.hero !== null && s.hero === me;
   if (s.roundSupply === 0n) line = 'no tokens yet';
@@ -748,7 +755,7 @@ export function Scene({ game, snap, chain, flash, crowd, scale = 1, onUseDemo }:
                 You did it
               </span>
             ) : (
-              <span className={cls('stage__line', s.saved && 'stage__line--saved')} id="round-line">
+              <span className={cls('stage__line', s.saved && 'stage__line--saved', lineTight && 'stage__line--tight')} id="round-line">
                 {line}
               </span>
             )}

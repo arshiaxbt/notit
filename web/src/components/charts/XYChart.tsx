@@ -138,7 +138,7 @@ export function XYChart({
         <ul className="legend chart__legend">
           {series.map((s) => (
             <li key={s.id}>
-              <span className={cls('legend__swatch', s.kind === 'dots' ? 'legend__swatch--dot' : 'legend__swatch--line')} aria-hidden="true" />
+              <span className={cls('legend__swatch', s.kind === 'dots' ? 'legend__swatch--dot' : 'legend__swatch--line', s.dashed && 'legend__swatch--dashed')} aria-hidden="true" />
               {s.label}
             </li>
           ))}

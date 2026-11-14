@@ -186,6 +186,9 @@
     stroke-width: 20px;
   }
 }
+.stage__line.stage__line--tight {
+  font-size: var(--text-s);
+}
 .stage__line .who {
   padding: 0;
   background: none;

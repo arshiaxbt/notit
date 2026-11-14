@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
-import type { MixedCrowdResult, WhoPaysResult } from '@notit/engine';
+import type { ForwardLookingResult, MixedCrowdResult, WhoPaysResult } from '@notit/engine';
 import { XYChart } from '../components/charts/XYChart';
 import type { Tick } from '../components/charts/XYChart';
 import { Card, cls } from '../components/ui';
 import { formatInt, formatToken } from '../lib/format';
 import { queryGet, querySet } from '../lib/url';
-import { PRESETS, SWEEP, theoryFailure } from './jobs';
+import { PRESETS, SWEEP, classicFailure, equilibriumFailure } from './jobs';
 import type { BystanderPreset, BystanderRow, PathResult } from './jobs';
 import { runInBackground } from './runner';
 
-type Experiment = 'bystander' | 'whoPays' | 'mixed';
+type Experiment = 'bystander' | 'whoPays' | 'mixed' | 'forward';
 
 const EXPERIMENTS: Array<{ id: Experiment; label: string; sub: string }> = [
   { id: 'bystander', label: 'Bystander effect', sub: 'Bigger crowd, fewer volunteers' },
   { id: 'whoPays', label: 'Who pays', sub: 'Whales and small holders' },
   { id: 'mixed', label: 'Mixed crowd', sub: 'The idle get taxed' },
+  { id: 'forward', label: 'Forward-looking', sub: 'The seat is an auction' },
 ];
 
 function pct(x: number, digits = 1): string {
@@ -162,7 +163,8 @@ function sliderFromN(n: number): number {
 
 const N_TICKS: Tick[] = [2, 5, 10, 20, 50, 100, 300].map((v) => ({ v, label: String(v) }));
 const PCT_TICKS: Tick[] = [0, 0.25, 0.5, 0.75, 1].map((v) => ({ v, label: `${v * 100}%` }));
-const THEORY_POINTS = Array.from({ length: N_MAX - N_MIN + 1 }, (_, i) => ({ x: i + N_MIN, y: theoryFailure(i + N_MIN) }));
+const EQUILIBRIUM_POINTS = Array.from({ length: N_MAX - N_MIN + 1 }, (_, i) => ({ x: i + N_MIN, y: equilibriumFailure(i + N_MIN) }));
+const CLASSIC_POINTS = Array.from({ length: N_MAX - N_MIN + 1 }, (_, i) => ({ x: i + N_MIN, y: classicFailure(i + N_MIN) }));
 
 /** Round tick values covering [min, max] with about four steps. */
 function niceTicks(min: number, max: number): number[] {
@@ -257,13 +259,13 @@ function Bystander() {
     return [1, r / 4, r / 2, (3 * r) / 4, r].map((v) => ({ v: Math.max(1, Math.round(v)), label: formatInt(Math.max(1, Math.round(v))) }));
   }, [path, trials]);
 
-  // One sentence: the number for the chosen crowd, next to what the theory says.
+  // One sentence: the number for the chosen crowd, next to what the equilibrium says.
   const reading: ReactNode = !picked ? (
     <p>Simulating…</p>
   ) : (
     <p>
-      With <b>{n}</b> holders, <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds went unsaved; the theory says{' '}
-      {pct(picked.theory)}.
+      With <b>{n}</b> holders nobody volunteered in <b>{pct(picked.simulated)}</b> of {formatInt(picked.trials)} rounds; the equilibrium says{' '}
+      {pct(picked.equilibrium)}.
     </p>
   );
 
@@ -308,9 +310,10 @@ function Bystander() {
 
         <Card labelId="by-chart" title="Unsaved rounds, by crowd size">
           <XYChart
-            ariaLabel={`Share of unsaved rounds against crowd size, simulated and theory. At ${n} holders: simulated ${picked ? pct(picked.simulated) : 'pending'}, theory ${pct(theoryFailure(n))}.`}
+            ariaLabel={`Share of unsaved rounds against crowd size: simulated, the equilibrium where only the first volunteer pays, and the textbook case where every volunteer pays. At ${n} holders: simulated ${picked ? pct(picked.simulated) : 'pending'}, equilibrium ${pct(equilibriumFailure(n))}, if every volunteer paid ${pct(classicFailure(n))}.`}
             series={[
-              { id: 'theory', label: 'Theory (volunteer’s dilemma)', kind: 'line', points: THEORY_POINTS },
+              { id: 'equilibrium', label: 'Equilibrium (first volunteer pays)', kind: 'line', points: EQUILIBRIUM_POINTS },
+              { id: 'classic', label: 'If every volunteer paid', kind: 'line', dashed: true, points: CLASSIC_POINTS },
               { id: 'sim', label: `Simulated: ${PRESETS[preset].label}`, kind: 'dots', points: rows.map((r) => ({ x: r.n, y: r.simulated })) },
             ]}
             xDomain={[N_MIN, N_MAX]}
@@ -331,11 +334,13 @@ function Bystander() {
                 title: `${r.n} holders`,
                 rows: [
                   ['simulated', pct(r.simulated)],
-                  ['theory', pct(r.theory)],
+                  ['equilibrium', pct(r.equilibrium)],
+                  ['if every volunteer paid', pct(r.classic)],
                 ],
               };
             }}
           />
+          <p className="lab__why">Only the first volunteer pays, so holders volunteer more readily than in the textbook dilemma.</p>
         </Card>
 
         <Card
@@ -402,16 +407,19 @@ function Bystander() {
                 <tr>
                   <th scope="col">Holders</th>
                   <th scope="col" className="num col-wide">
-                    One acts
+                    One volunteers
                   </th>
                   <th scope="col" className="num">
-                    Theory
+                    Equilibrium
                   </th>
                   <th scope="col" className="num">
                     Simulated
                   </th>
                   <th scope="col" className="num col-wide">
                     Gap
+                  </th>
+                  <th scope="col" className="num th-wrap">
+                    If every volunteer paid
                   </th>
                 </tr>
               </thead>
@@ -420,9 +428,10 @@ function Bystander() {
                   <tr key={r.n} className={cls(r.n === n && 'is-picked')}>
                     <th scope="row">{r.n}</th>
                     <td className="num col-wide">{pct(r.p)}</td>
-                    <td className="num">{pct(r.theory)}</td>
+                    <td className="num">{pct(r.equilibrium)}</td>
                     <td className="num">{pct(r.simulated)}</td>
-                    <td className="num col-wide">{gap(r.simulated - r.theory)}</td>
+                    <td className="num col-wide">{gap(r.simulated - r.equilibrium)}</td>
+                    <td className="num">{pct(r.classic)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -793,6 +802,63 @@ function Mixed() {
   );
 }
 
+/* ------------------------------------------------------ D. forward-looking */
+
+function Forward() {
+  const { result, running, error } = useJob<ForwardLookingResult>(() => runInBackground({ kind: 'forwardLooking' }), []);
+  return (
+    <div className="lab__grid lab__grid--single">
+      <div className="lab__results" style={{ opacity: running && result ? 0.6 : 1 }}>
+        {!result ? (
+          <p className="empty">{error ?? 'Simulating…'}</p>
+        ) : (
+          <>
+            <div className="reading">
+              <p>
+                If holders value being It, rounds go unsaved at most <b>{(result.bound * 100).toFixed(1)}%</b> of the time.
+              </p>
+            </div>
+            <div className="tablewrap" tabIndex={0} role="region" aria-label="Forward-looking holders, by crowd size">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th scope="col">Holders</th>
+                    <th scope="col" className="num">
+                      Share each
+                    </th>
+                    <th scope="col" className="num">
+                      Unsaved
+                    </th>
+                    <th scope="col" className="num">
+                      Bound
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.runs.map((r) => (
+                    <tr key={r.holders} className={cls(!r.withinBound && 'is-over')} title={r.withinBound ? undefined : 'Scripted strategy, 20-round memory'}>
+                      <th scope="row">
+                        {formatInt(r.holders)}
+                        {!r.withinBound && <span className="table__sub">above the bound: scripted strategy, 20-round memory</span>}
+                      </th>
+                      <td className="num">{pct(r.holderShare)}</td>
+                      <td className="num">{pct(r.unsavedRate)}</td>
+                      <td className="num">{(result.bound * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="controls__status" role="status" aria-live="polite">
+              Done
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------- page */
 
 export function Lab() {
@@ -853,6 +919,7 @@ export function Lab() {
         {exp === 'bystander' && <Bystander />}
         {exp === 'whoPays' && <WhoPays />}
         {exp === 'mixed' && <Mixed />}
+        {exp === 'forward' && <Forward />}
       </div>
     </div>
   );

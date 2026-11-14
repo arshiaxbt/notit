@@ -62,6 +62,8 @@ const OUT_DIR = resolve(process.env.OUT_DIR ?? join(here, '../../docs/media'));
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 const FFPROBE = process.env.FFPROBE ?? 'ffprobe';
 const REHEARSAL = process.env.REHEARSAL === '1';
+/** `lab` mode: film only the Lab beat (it does not touch the chain), to splice into a take with BEAT6_FROM. */
+let LAB_ONLY = false;
 /** Shown on the end card. */
 const SITE = process.env.SITE ?? 'arshiaxbt.github.io/notit';
 /** Rehearse the lock beat's scrolling on a contract that is not locked (never for a real take). */
@@ -98,18 +100,17 @@ export function installOverlay({ zoom, speed, url = '', band = 97 }) {
     .vid-fast { right: 28px; top: ${band + 16}px; padding: 4px 13px 5px; background: #16130c; color: #ffd60a;
       border-radius: 10px; font-weight: 800; font-size: 24px; letter-spacing: .02em; display: none; }
     .vid-fast.on { display: block; }
-    .vid-end { inset: 0; display: grid; place-content: center; justify-items: center; gap: 22px; background: #16130c; color: #fff4d6;
+    .vid-end { inset: 0; display: grid; place-content: center; justify-items: center; gap: 20px; background: #ffd60a; color: #16130c;
       opacity: 0; transition: opacity .35s ease; text-align: center; }
     .vid-end.on { opacity: 1; }
     .vid-end__logo { display: flex; align-items: center; gap: 18px; font-weight: 800; font-size: 120px; line-height: 1; letter-spacing: -0.04em; }
-    .vid-end__it { padding: 6px 30px 16px; background: #ffd60a; color: #16130c; border-radius: 28px; transform: rotate(-5deg); }
+    .vid-end__it { padding: 6px 30px 16px; background: #ffd60a; color: #16130c; border: 8px solid #16130c; border-radius: 30px; transform: rotate(-5deg); }
     .vid-end__name { font-weight: 800; font-size: 46px; letter-spacing: -0.02em; }
-    .vid-end__name b { color: #ffd60a; }
+    .vid-end__name b { color: inherit; }
     .vid-end__by { font-weight: 700; font-size: 34px; }
-    .vid-end__url { font-weight: 800; font-size: 34px; color: #ffd60a; }
+    .vid-end__url { font-weight: 800; font-size: 34px; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
     .vid-end__url:empty { display: none; }
-    .vid-end__small { margin-top: 6px; padding: 6px 18px; border: 2.5px solid #fff4d6; border-radius: 999px; font-weight: 700; font-size: 22px;
-      letter-spacing: .09em; text-transform: uppercase; }
+    .vid-end__small { margin-top: 4px; font-weight: 700; font-size: 26px; }
   `;
   document.documentElement.appendChild(style);
   const make = (cls) => {
@@ -127,7 +128,7 @@ export function installOverlay({ zoom, speed, url = '', band = 97 }) {
     <div class="vid-end__name">Not It <b>($NOTIT)</b></div>
     <div class="vid-end__by">built at NEAR HACKATHON</div>
     <div class="vid-end__url">${url}</div>
-    <div class="vid-end__small">testnet · no value</div>`;
+    <div class="vid-end__small">testnet, no value</div>`;
   window.__vid = {
     caption(html) {
       if (!html) {
@@ -148,10 +149,10 @@ export function installOverlay({ zoom, speed, url = '', band = 97 }) {
 
 async function record() {
   const credPath = process.env.GUEST_CREDENTIALS;
-  if (!credPath) throw new Error('GUEST_CREDENTIALS is required: a credentials file { account_id, private_key }');
-  const cred = JSON.parse(await readFile(resolve(credPath.replace(/^~/, process.env.HOME ?? '~')), 'utf8'));
+  if (!credPath && !LAB_ONLY) throw new Error('GUEST_CREDENTIALS is required: a credentials file { account_id, private_key }');
+  const cred = LAB_ONLY ? { account_id: '', private_key: '' } : JSON.parse(await readFile(resolve(credPath.replace(/^~/, process.env.HOME ?? '~')), 'utf8'));
   const guest = { accountId: cred.account_id, secretKey: cred.private_key };
-  if (!guest.accountId || !/^ed25519:/.test(guest.secretKey ?? '')) throw new Error('credentials file needs account_id and private_key');
+  if (!LAB_ONLY && (!guest.accountId || !/^ed25519:/.test(guest.secretKey ?? ''))) throw new Error('credentials file needs account_id and private_key');
 
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? 'playwright');
   await rm(WORK_DIR, { recursive: true, force: true });
@@ -171,7 +172,8 @@ async function record() {
     localStorage.setItem('notit-theme', 'light');
   };
   const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, colorScheme: 'light' });
-  await context.addInitScript(signIn, { ...guest, fresh: !REHEARSAL });
+  if (LAB_ONLY) await context.addInitScript(() => localStorage.setItem('notit-theme', 'light'));
+  else await context.addInitScript(signIn, { ...guest, fresh: !REHEARSAL });
   const page = await context.newPage();
   const problems = [];
   // A public RPC endpoint that rate-limits answers without CORS headers; the app fails over
@@ -309,7 +311,68 @@ async function record() {
   };
 
   const facts = { account: guest.accountId, base: BASE_URL, txs: [] };
+
+  /** How many holders the crowd-size slider is set to. */
+  const crowdSize = () => page.evaluate(() => Number((document.querySelector('#by-n')?.getAttribute('aria-valuetext') ?? '0').replace(/\D/g, '')));
+  const labDone = () => page.waitForFunction(() => /Done/.test(document.querySelector('.controls__status')?.textContent ?? ''), null, { timeout: 60_000 });
+  /** Puts the slider at about `target` holders with the arrow keys (the scale is logarithmic). */
+  const slideTo = async (target, pause) => {
+    await page.locator('#by-n').focus();
+    const position = () => page.evaluate(() => Number(document.querySelector('#by-n')?.value ?? 0));
+    for (let i = 0; i < 260; i++) {
+      const n = await crowdSize();
+      if (n === target) break;
+      const before = await position();
+      await page.keyboard.press(n < target ? 'ArrowRight' : 'ArrowLeft');
+      await sleep(pause || 20);
+      // Several positions of the slider can mean the same size; only an unmoved slider is the end of the scale.
+      if ((await position()) === before) break;
+      const m = await crowdSize();
+      if ((n < target && m >= target) || (n > target && m <= target)) break;
+    }
+  };
+  /**
+   * The Lab beat: the crowd grows from about 10 to about 60 holders and the simulated point
+   * climbs the equilibrium curve, with the dashed textbook line above it.
+   */
+  const labBeat = async () => {
+    await page.mouse.move(16, 420); // in the margin: over the chart it would raise a tooltip
+    await caption('More holders who could act, <b>less chance anyone does.</b> Simulated against the equilibrium.');
+    await page.waitForSelector('#by-n');
+    await scrollTo('.lab__grid', BAND + 14);
+    await labDone();
+    await sleep(1600);
+    for (const target of [20, 35, 60]) {
+      await slideTo(target, 30);
+      await labDone();
+      await sleep(550);
+    }
+    event('lab', { holders: await crowdSize(), reading: (await text('.reading')).slice(0, 160) });
+    await sleep(2300);
+    await shot('lab.png');
+  };
+
   try {
+    take: {
+      if (LAB_ONLY) {
+        // Only the Lab: open it, start small, film the crowd growing.
+        await page.goto(`${BASE_URL}#lab`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#by-n', { timeout: 45_000 });
+        await page.evaluate(() => document.fonts.ready);
+        await page.evaluate(installOverlay, { zoom: ZOOM, speed: FAST, url: SITE, band: BAND });
+        await labDone();
+        await slideTo(10, 0);
+        await labDone();
+        await scrollTo('.lab__grid', BAND + 14);
+        await page.mouse.move(16, 420); // in the margin: over the chart it would raise a tooltip
+        await caption('More holders who could act, <b>less chance anyone does.</b> Simulated against the equilibrium.');
+        await sleep(500);
+        await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 93, everyNthFrame: 1 });
+        segment('beat6', 1);
+        await labBeat();
+        segment('stop', 0);
+        break take;
+      }
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.stage .face', { timeout: 45_000 });
     if (REHEARSAL) await page.waitForSelector('.acct__id', { timeout: 45_000 });
@@ -350,6 +413,7 @@ async function record() {
     await sleep(1800);
     if (canClaim) {
       await page.locator('.dock .act').click();
+      await page.mouse.move(1180, 420); // off the button, so it is not filmed in its hover colour
       event('sign-up clicked', { round: await round() });
       // Done when the sign-up is over: the key marker is there and the button is the game's again.
       await settle(
@@ -363,23 +427,19 @@ async function record() {
       facts.key = await text('.chainbar .keymark');
       event('sign-up finished', { balance: await balance(), key: facts.key });
       // The band lifts for a moment, so the header shows "key: volunteer only" beside the account.
+      await sleep(900);
       await caption('');
-      await sleep(2200);
+      await sleep(2600);
     } else {
       log('rehearsal: this account has already claimed here, so the claim is skipped');
       await sleep(3000);
     }
-    await caption('The guest holds <b>1,000 NOTIT</b> and a key that can only volunteer. Real transactions on NEAR testnet.');
-    await sleep(900);
     for (const href of await page.locator('.txlink a').evaluateAll((els) => els.map((a) => a.href))) facts.txs.push({ what: 'claim', href });
-    await sleep(1400);
-    await shot('play-testnet.png');
-    await sleep(900);
 
     // ---- wait for the next round, fast ----
     segment('ff1', FAST);
     await marker(true);
-    await caption('The next round opens. <b>The cost to step up starts high and falls.</b>');
+    await caption('The next round opens. <b>The cost to volunteer starts high and falls.</b>');
     for (;;) {
       if ((await round()) > r0 && (await secondsLeft()) <= 162 && !(await saved())) break;
       if ((await round()) > r0 + 1) throw new Error('missed the round after the claim');
@@ -390,11 +450,14 @@ async function record() {
     // ---- beat 3: "I'll do it" ----
     await marker(false);
     segment('beat3', 1);
-    await sleep(3600);
+    await sleep(1300);
+    await shot('play-testnet.png'); // the live ring mid-round, the cost falling on the button
+    await sleep(2300);
     if (!/I'll do it/.test(await text('.dock .act')) || (await page.locator('.dock .act:not([disabled])').count()) === 0) throw new Error(`cannot volunteer: ${await text('.dock')}`);
     const shown = await text('.act__cost .sr-only');
     const heldBefore = await balance();
     await page.locator('.dock .act').click();
+      await page.mouse.move(1180, 420); // off the button, so it is not filmed in its hover colour
     event('volunteer clicked', { round: r1, costShown: shown, secondsLeft: await secondsLeft() });
     await settle(
       'beat3',
@@ -407,9 +470,13 @@ async function record() {
     if (!/You did it/.test(await text('.stamp'))) throw new Error(`volunteer was refused: ${await text('.dock')}`);
     // What was burned is what left the balance (the figure under the stage counts down to it).
     await sleep(1100);
-    const burned = fmt(num(heldBefore) - num(await balance()));
-    event('volunteer confirmed', { burned, state: await text('.stamp'), tableBurned: await mine(2) });
-    await caption(`The guest burns <b>${burned} NOTIT</b> and is now <b>It</b>. A real transaction on NEAR testnet.`);
+    // The app's own "Burned" figure for this account, when the table already has it (a fresh
+    // account has burned nothing else); otherwise the drop in the balance, which can differ
+    // from it by a hundredth because both balances are shown truncated.
+    const tableBurned = await mine(2);
+    const burned = tableBurned || fmt(num(heldBefore) - num(await balance()));
+    event('volunteer confirmed', { burned, state: await text('.stamp'), tableBurned });
+    await caption(`Burn <b>${burned} NOTIT</b>: the round is saved and you are <b>It</b>. A real transaction on NEAR testnet.`);
     await sleep(600);
     for (const href of await page.locator('.txlink a').evaluateAll((els) => els.map((a) => a.href))) facts.txs.push({ what: 'volunteer', href });
     await sleep(1700);
@@ -419,7 +486,7 @@ async function record() {
 
     // ---- the rest of this round and most of the next: left out ----
     segment('wait', 0);
-    await caption('The next round. <b>Nobody steps up.</b>');
+    await caption('The next round. <b>Nobody volunteers.</b>');
     for (;;) {
       const r = await round();
       if (r > r1 + 1) throw new Error('missed the quiet round');
@@ -443,12 +510,13 @@ async function record() {
     // Run the clock out, then give the chain a moment; a longer wait is fast-forwarded.
     while ((await secondsLeft()) > 0 && (await round()) === r2) await sleep(150);
     await settle('beat4', collapse);
+    // The README's collapse picture is cut from the filmed frames (coins mid-flight), so nothing pauses here.
+    facts.collapseAt = now();
     event('collapse seen', { round: r2, line: await text('.stage__line'), note: await text('.act__note') });
-    await caption('Nobody stepped up. <b>Everyone paid 15% to It.</b>');
+    await caption('Nobody volunteered. <b>Everyone paid 15% to It.</b>');
     await sleep(1300);
     // The app's own "+…" chip next to the balance is the amount that just arrived.
     const gained = (await text('.figs__delta')).replace(/^\+/, '');
-    await shot('collapse.png');
     await sleep(1600);
     const collected = await mine(3);
     const after = await balance();
@@ -458,7 +526,7 @@ async function record() {
     // of the balance), so the caption never differs from the page by a rounding unit.
     const rise = collected && collectedBefore ? fmt(num(collected) - num(collectedBefore)) : fmt(num(after) - num(before));
     facts.collapse.shown = gained || rise;
-    await caption(`Nobody stepped up. <b>Everyone paid 15% to It:</b> +${facts.collapse.shown} NOTIT.`);
+    await caption(`Nobody volunteered. <b>Everyone paid 15% to It:</b> +${facts.collapse.shown} NOTIT.`);
     await sleep(3600);
     bots('start');
 
@@ -482,24 +550,7 @@ async function record() {
     // ---- beat 6: the Lab ----
     segment('beat6', 1);
     await page.getByRole('tab', { name: 'Lab' }).click();
-    await caption('More people who could act → <b>less likely anyone does.</b> Simulated against the theory.');
-    await page.waitForSelector('#by-n');
-    await scrollTo('.lab__grid', BAND + 14);
-    await page.waitForFunction(() => /Done/.test(document.querySelector('.controls__status')?.textContent ?? ''), null, { timeout: 60_000 });
-    await sleep(1500);
-    // Three pushes of the slider, pausing so the simulated point for each size appears.
-    await page.locator('#by-n').focus();
-    for (let push = 0; push < 3; push++) {
-      for (let i = 0; i < 15; i++) {
-        await page.keyboard.press('ArrowRight');
-        await sleep(60);
-      }
-      await page.waitForFunction(() => /Done/.test(document.querySelector('.controls__status')?.textContent ?? ''), null, { timeout: 60_000 });
-      await sleep(400);
-    }
-    event('lab', { reading: (await text('.reading')).slice(0, 160) });
-    await sleep(2200);
-    await shot('lab.png');
+    await labBeat();
 
     // ---- beat 7: end card ----
     segment('end', 1);
@@ -507,6 +558,7 @@ async function record() {
     await page.evaluate(() => window.__vid.end(true));
     await sleep(5000);
     segment('stop', 0);
+    }
   } catch (e) {
     problems.push(`FAILED: ${e instanceof Error ? e.message : String(e)}`);
     await page.screenshot({ path: join(WORK_DIR, 'failure.png') }).catch(() => {});
@@ -554,14 +606,34 @@ async function build() {
   await rm(parts, { recursive: true, force: true });
   await mkdir(parts, { recursive: true });
 
+  // SKIP_SEGMENTS=beat6 leaves segments out of the cut. BEAT6_FROM=<work dir of `lab`> takes the
+  // Lab beat from a separate recording (the Lab does not touch the chain, so it can be re-shot).
+  const skip = new Set((process.env.SKIP_SEGMENTS ?? '').split(',').map((x) => x.trim()).filter(Boolean));
+  let labDir = null;
+  let labTimeline = null;
+  if (process.env.BEAT6_FROM) {
+    labDir = resolve(process.env.BEAT6_FROM);
+    labTimeline = JSON.parse(await readFile(join(labDir, 'timeline.json'), 'utf8'));
+  }
+
   // 1. One clip per segment: each frame is held until the next one, divided by the segment's speed.
   const clips = [];
-  for (const [i, seg] of segments.entries()) {
-    if (seg.speed === 0) continue;
-    const own = frames.filter((f) => f.ts >= seg.start && f.ts < seg.end);
+  for (const [i, seg0] of segments.entries()) {
+    if (seg0.speed === 0 || skip.has(seg0.name)) continue;
+    let seg = seg0;
+    let segFrames = frames;
+    let framesDir = join(WORK_DIR, 'frames');
+    if (labTimeline && seg0.name === 'beat6') {
+      const other = labTimeline.segments.find((x) => x.name === 'beat6');
+      if (!other) throw new Error(`no beat6 segment in ${labDir}`);
+      seg = { ...other, dissolve: seg0.dissolve };
+      segFrames = [...labTimeline.frames].sort((a, b) => a.ts - b.ts);
+      framesDir = join(labDir, 'frames');
+    }
+    const own = segFrames.filter((f) => f.ts >= seg.start && f.ts < seg.end);
     // If the picture did not change right at the start of the segment, the frame showing
     // then is the last one before it (only if recent: nothing is kept during left-out waits).
-    const before = frames.filter((f) => f.ts < seg.start).pop();
+    const before = segFrames.filter((f) => f.ts < seg.start).pop();
     if (before && seg.start - before.ts < 1 && (own.length === 0 || own[0].ts - seg.start > 0.05)) {
       own.unshift({ file: before.file, ts: seg.start });
     }
@@ -572,9 +644,9 @@ async function build() {
     let list = '';
     for (const [k, f] of own.entries()) {
       const until = k + 1 < own.length ? own[k + 1].ts : seg.end;
-      list += `file '${join(WORK_DIR, 'frames', f.file)}'\nduration ${(Math.max(0.001, until - f.ts) / seg.speed).toFixed(5)}\n`;
+      list += `file '${join(framesDir, f.file)}'\nduration ${(Math.max(0.001, until - f.ts) / seg.speed).toFixed(5)}\n`;
     }
-    list += `file '${join(WORK_DIR, 'frames', own[own.length - 1].file)}'\n`;
+    list += `file '${join(framesDir, own[own.length - 1].file)}'\n`;
     const listFile = join(parts, `${i}-${seg.name}.txt`);
     const clip = join(parts, `${i}-${seg.name}.mp4`);
     await writeFile(listFile, list);
@@ -614,6 +686,19 @@ async function build() {
     ffmpeg([...inputs, '-filter_complex', filter.replace(/;$/, ''), '-map', '[v]', ...encode]);
   }
 
+  // 2b. The README's collapse picture: the filmed frame about 0.3 s after the round closed
+  // unsaved (coins on their way), without the caption band.
+  const collapseAt = timeline.facts?.collapseAt;
+  if (collapseAt) {
+    const want = collapseAt + 0.42;
+    const near = frames.filter((f) => f.ts >= collapseAt + 0.2 && f.ts <= collapseAt + 0.7).sort((a, b) => Math.abs(a.ts - want) - Math.abs(b.ts - want))[0];
+    if (near) {
+      await mkdir(join(WORK_DIR, 'shots'), { recursive: true });
+      ffmpeg(['-i', join(WORK_DIR, 'frames', near.file), '-vf', `crop=${W}:${H - BAND - 1}:0:${BAND + 1}`, join(WORK_DIR, 'shots', 'collapse.png')]);
+      console.log(`collapse.png from ${near.file}, ${(near.ts - collapseAt).toFixed(2)} s after the round closed`);
+    } else console.log('no frame near the collapse for collapse.png');
+  }
+
   // 3. Where each beat lands in the finished video.
   let t = 0;
   const beats = [];
@@ -641,6 +726,10 @@ async function build() {
 // Only when run directly (the overlay can be imported on its own to check the layout).
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const mode = process.argv[2] ?? 'all';
+  if (mode === 'lab') {
+    LAB_ONLY = true;
+    await record();
+  }
   if (mode === 'record' || mode === 'all') await record();
   if (mode === 'build' || mode === 'all') await build();
 }

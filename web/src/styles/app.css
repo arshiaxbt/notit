@@ -1746,3 +1746,38 @@
     display: none;
   }
 }
+
+/* ---- the lab's equilibrium: the textbook case as a thinner dashed line, one line of why,
+   and the fourth experiment as a single column ---- */
+.chart__line--dashed {
+  stroke-width: 1.4;
+  stroke-dasharray: 6 5;
+  stroke-linecap: butt;
+}
+.lab__why {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-s);
+}
+.lab__grid--single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
+}
+.table tr.is-over td:nth-child(3) {
+  color: var(--cut);
+}
+.legend__swatch--dashed {
+  width: 22px;
+  height: 2px;
+  background: repeating-linear-gradient(to right, var(--ink) 0 6px, transparent 6px 10px);
+}
+/* a long column header may take two lines, so the table still fits a phone */
+.table th.th-wrap {
+  min-width: 5.5em;
+  white-space: normal;
+}
+.numbers,
+.numbers .tablewrap {
+  min-width: 0;
+  max-width: 100%;
+}

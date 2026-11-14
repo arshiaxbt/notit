@@ -7,22 +7,23 @@
 import {
   FAST,
   UNIT,
-  mixedEquilibriumFailure,
-  mixedEquilibriumP,
+  classicDilemma,
+  firstPaysEquilibrium,
   runBystander,
+  runForwardLooking,
   runMixedCrowd,
   runWhoPays,
   simulate,
   toTokens,
 } from '@notit/engine';
-import type { AgentSpec, MixedCrowdResult, StrategySpec, WhoPaysResult } from '@notit/engine';
+import type { AgentSpec, ForwardLookingResult, MixedCrowdResult, StrategySpec, WhoPaysResult } from '@notit/engine';
 
 export type BystanderPreset = 'equilibrium' | 'myopic' | 'throne' | 'snipers' | 'altruists';
 
 export const PRESETS: Record<BystanderPreset, { label: string; blurb: string; spec: StrategySpec }> = {
   equilibrium: {
-    label: 'Coin-flippers (the theory)',
-    blurb: 'Everyone waits for the final moment, then volunteers with the probability the theory predicts.',
+    label: 'Coin-flippers (the equilibrium)',
+    blurb: 'Everyone waits for the final moment, then volunteers with the probability the equilibrium predicts.',
     spec: { kind: 'mixedFinalBlock' },
   },
   myopic: {
@@ -54,10 +55,12 @@ export interface BystanderRow {
   n: number;
   /** q = cost in the final block / (cut × a player's balance), SPEC §11. */
   q: number;
-  /** Equilibrium chance that one player volunteers. */
+  /** Equilibrium chance that one holder volunteers, under the deployed rule: only the first volunteer pays. */
   p: number;
-  /** Theory: chance that nobody volunteers. */
-  theory: number;
+  /** That equilibrium's chance that nobody volunteers. */
+  equilibrium: number;
+  /** The same chance in the textbook dilemma, where every volunteer pays. For comparison only. */
+  classic: number;
   /** Simulated share of rounds nobody saved. */
   simulated: number;
   trials: number;
@@ -89,12 +92,14 @@ export type Job =
   | { kind: 'row'; n: number; trials: number; preset: BystanderPreset; seed: number }
   | { kind: 'path'; n: number; rounds: number; preset: BystanderPreset; seed: number }
   | { kind: 'whoPays'; holders: number; rounds: number; seed: number }
+  | { kind: 'forwardLooking' }
   | { kind: 'mixedCrowd'; altruists: number; snipers: number; freeRiders: number; missRate: number; rounds: number; seed: number };
 
 export interface JobResults {
   row: BystanderRow;
   path: PathResult;
   whoPays: WhoPaysResult;
+  forwardLooking: ForwardLookingResult;
   mixedCrowd: MixedCrowdResult;
 }
 
@@ -113,7 +118,7 @@ export function bystanderRow(n: number, trials: number, preset: BystanderPreset,
   if (preset === 'equilibrium') {
     // The engine's own experiment: all players `mixedFinalBlock`.
     const r = runBystander({ ns: [n], trials, seed }).rows[0]!;
-    return { n: r.n, q: r.q, p: r.p, theory: r.theory, simulated: r.simulated, trials: r.trials, failed: r.failed };
+    return { n: r.n, q: r.q, p: r.equilibriumP, equilibrium: r.equilibriumFail, classic: r.classicFail, simulated: r.simulated, trials: r.trials, failed: r.failed };
   }
   // Same set-up as runBystander, with a different strategy for the players.
   const sim = simulate({
@@ -128,8 +133,9 @@ export function bystanderRow(n: number, trials: number, preset: BystanderPreset,
   return {
     n,
     q,
-    p: mixedEquilibriumP(q, n),
-    theory: mixedEquilibriumFailure(q, n),
+    p: firstPaysEquilibrium(n, q).p,
+    equilibrium: firstPaysEquilibrium(n, q).fail,
+    classic: classicDilemma(n, q).fail,
     simulated: sim.failureRate,
     trials,
     failed: sim.collapsed + sim.dormant,
@@ -159,10 +165,19 @@ export function supplyPath(n: number, rounds: number, preset: BystanderPreset, s
   };
 }
 
-/** The theory curve of SPEC §11 for N players plus It, all with equal balances. */
-export function theoryFailure(n: number): number {
-  const q = (FAST.minCostPpm * (n + 1)) / FAST.cutPpm;
-  return mixedEquilibriumFailure(q, n);
+/** q of SPEC §11 for N holders plus It, all with equal balances: the cheapest save over what an unsaved round takes. */
+function qFor(n: number): number {
+  return (FAST.minCostPpm * (n + 1)) / FAST.cutPpm;
+}
+
+/** The equilibrium curve under the deployed rule (only the first volunteer pays). */
+export function equilibriumFailure(n: number): number {
+  return firstPaysEquilibrium(n, qFor(n)).fail;
+}
+
+/** The textbook dilemma's curve, where every volunteer pays. For comparison only. */
+export function classicFailure(n: number): number {
+  return classicDilemma(n, qFor(n)).fail;
 }
 
 /** Smallest crowd for which even the cheapest save costs a player more than a collapse. */
@@ -179,6 +194,8 @@ export function runJob(job: Job): JobResults[Job['kind']] {
       return supplyPath(job.n, job.rounds, job.preset, job.seed);
     case 'whoPays':
       return runWhoPays({ holders: job.holders, rounds: job.rounds, seed: job.seed });
+    case 'forwardLooking':
+      return runForwardLooking();
     case 'mixedCrowd':
       return runMixedCrowd({
         altruists: job.altruists,
